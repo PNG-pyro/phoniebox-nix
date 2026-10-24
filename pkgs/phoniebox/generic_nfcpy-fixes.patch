@@ -1177,10 +1177,10 @@ index fedc57a..a17f4ea 100644
    socketRequest,
 diff --git a/src/webapp/src/utils/use-scroll-memory.js b/src/webapp/src/utils/use-scroll-memory.js
 new file mode 100644
-index 0000000..78009ee
+index 0000000..04f8694
 --- /dev/null
 +++ b/src/webapp/src/utils/use-scroll-memory.js
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,66 @@
 +import { useEffect, useRef } from 'react';
 +
 +// Walk up from an element to the nearest ancestor that actually scrolls
@@ -1234,9 +1234,11 @@ index 0000000..78009ee
 +      });
 +    };
 +
-+    scroller.addEventListener('scroll', onScroll, { passive: true });
++    // When the page itself scrolls, the scroll events go to `window`, not the element
++    const eventTarget = scroller === document.scrollingElement ? window : scroller;
++    eventTarget.addEventListener('scroll', onScroll, { passive: true });
 +    return () => {
-+      scroller.removeEventListener('scroll', onScroll);
++      eventTarget.removeEventListener('scroll', onScroll);
 +      if (frame) cancelAnimationFrame(frame);
 +    };
 +  }, [key, ready]);
