@@ -381,6 +381,183 @@ index 75ce784..65be0cd 100644
        <Grid item>
          <SettingsAutoHotspot />
        </Grid>
+diff --git a/src/webapp/src/components/Settings/wifi.js b/src/webapp/src/components/Settings/wifi.js
+new file mode 100644
+index 0000000..5b28da1
+--- /dev/null
++++ b/src/webapp/src/components/Settings/wifi.js
+@@ -0,0 +1,171 @@
++import React, { useEffect, useRef, useState } from 'react';
++
++import {
++  Alert,
++  Button,
++  Card,
++  CardContent,
++  CardHeader,
++  CircularProgress,
++  Dialog,
++  DialogActions,
++  DialogContent,
++  DialogContentText,
++  DialogTitle,
++  Divider,
++  List,
++  ListItemButton,
++  ListItemIcon,
++  ListItemText,
++  TextField,
++} from '@mui/material';
++import LockIcon from '@mui/icons-material/Lock';
++import WifiIcon from '@mui/icons-material/Wifi';
++
++import request from '../../utils/request';
++
++const SettingsWifi = () => {
++  const [status, setStatus] = useState(null);             // { ssid, signal }
++  const [networks, setNetworks] = useState([]);
++  const [isScanning, setIsScanning] = useState(false);
++  const [selected, setSelected] = useState(null);         // network picked for the dialog
++  const [password, setPassword] = useState('');
++  const [connectState, setConnectState] = useState(null); // { state, ssid, message }
++  const pollRef = useRef(null);
++
++  const getStatus = async () => {
++    const { result, error } = await request('getWifiStatus');
++    if (result) setStatus(result);
++    if (error) console.error(error);
++  };
++
++  const scan = async () => {
++    setIsScanning(true);
++    const { result, error } = await request('scanWifi');
++    if (result) setNetworks(result);
++    if (error) console.error(error);
++    setIsScanning(false);
++  };
++
++  const stopPolling = () => {
++    if (pollRef.current) {
++      clearInterval(pollRef.current);
++      pollRef.current = null;
++    }
++  };
++
++  // Ask the daemon every 2 seconds how the connection attempt is going
++  const pollConnectState = () => {
++    stopPolling();
++    pollRef.current = setInterval(async () => {
++      const { result } = await request('getWifiConnectState');
++      if (!result) return;
++      setConnectState(result);
++      if (result.state !== 'connecting') {
++        stopPolling();
++        getStatus();
++        scan();
++      }
++    }, 2000);
++  };
++
++  const connect = async () => {
++    const ssid = selected.ssid;
++    setSelected(null);
++    setConnectState({ state: 'connecting', ssid, message: '' });
++    const { result, error } = await request('connectWifi', { ssid, password });
++    setPassword('');
++    if (error || result === 'busy') {
++      setConnectState({
++        state: 'failed',
++        ssid,
++        message: error ? String(error.message || error) : 'Already connecting',
++      });
++      return;
++    }
++    pollConnectState();
++  };
++
++  // On first appearance: load status and networks; stop polling when leaving the page
++  useEffect(() => {
++    getStatus();
++    scan();
++    return stopPolling;
++  }, []);
++
++  const busy = connectState?.state === 'connecting';
++
++  return (
++    <Card>
++      <CardHeader
++        title="WiFi"
++        subheader={status?.ssid ? `Connected to ${status.ssid}` : 'Not connected'}
++      />
++      <Divider />
++      <CardContent>
++        {busy &&
++          <Alert severity="info" icon={<CircularProgress size={20} />}>
++            Connecting to {connectState.ssid}…
++          </Alert>}
++        {connectState?.state === 'connected' &&
++          <Alert severity="success">Connected to {connectState.ssid}</Alert>}
++        {connectState?.state === 'failed' &&
++          <Alert severity="error">
++            Could not connect to {connectState.ssid}: {connectState.message}
++          </Alert>}
++
++        <List dense>
++          {networks.map((n) => (
++            <ListItemButton
++              key={n.ssid}
++              selected={n.active}
++              disabled={n.active || busy}
++              onClick={() => { setPassword(''); setSelected(n); }}
++            >
++              <ListItemIcon><WifiIcon /></ListItemIcon>
++              <ListItemText
++                primary={n.ssid}
++                secondary={`${n.signal}%${n.active ? ' · connected' : ''}`}
++              />
++              {n.secure && <LockIcon fontSize="small" />}
++            </ListItemButton>
++          ))}
++        </List>
++
++        <Button onClick={scan} disabled={isScanning || busy}>
++          {isScanning ? 'Scanning…' : 'Scan again'}
++        </Button>
++      </CardContent>
++
++      <Dialog open={!!selected} onClose={() => setSelected(null)}>
++        <DialogTitle>Connect to {selected?.ssid}</DialogTitle>
++        <DialogContent>
++          <DialogContentText>
++            The jukebox will switch to this network. If your phone stays on the
++            current one, you'll lose contact with the jukebox until you join the
++            same network.
++          </DialogContentText>
++          {selected?.secure &&
++            <TextField
++              autoFocus
++              margin="dense"
++              label="Password"
++              type="password"
++              fullWidth
++              variant="standard"
++              value={password}
++              onChange={(e) => setPassword(e.target.value)}
++            />}
++        </DialogContent>
++        <DialogActions>
++          <Button onClick={() => setSelected(null)}>Cancel</Button>
++          <Button onClick={connect} disabled={selected?.secure && password.length < 8}>
++            Connect
++          </Button>
++        </DialogActions>
++      </Dialog>
++    </Card>
++  );
++};
++
++export default SettingsWifi;
 diff --git a/src/webapp/src/config.js b/src/webapp/src/config.js
 index 46a6ec1..a47b125 100644
 --- a/src/webapp/src/config.js
