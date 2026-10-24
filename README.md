@@ -16,7 +16,7 @@ Add the flake as an input and import the module:
 
 ```nix
 {
-  inputs.phoniebox.url = "github:YOUR-USERNAME/phoniebox-nix";
+  inputs.phoniebox.url = "github:PNG-pyro/phoniebox-nix";
 
   outputs = { nixpkgs, phoniebox, ... }: {
     nixosConfigurations.jukebox = nixpkgs.lib.nixosSystem {
