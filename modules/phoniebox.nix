@@ -53,6 +53,20 @@ let
         rwmd: ${cfg.user}
   '';
 
+  evdevFile = settingsFormat.generate "evdev.yaml" {
+    devices = lib.mapAttrs (_: d: {
+      device_name = d.name;
+      inherit (d) exact;
+      input_devices = lib.mapAttrs (_: b: {
+        type = "Button";
+        kwargs.key_code = b.key;
+        actions.on_press = b.action;
+      }) d.buttons;
+    }) cfg.evdev.devices;
+  };
+
+  hasEvdev = cfg.evdev.devices != { };
+
 in
 {
   options.services.phoniebox = {
@@ -106,124 +120,178 @@ in
         the web app left it.
       '';
     };
-  };
 
-  config = lib.mkIf cfg.enable {
-
-    users.users.${cfg.user} = {
-      linger = true;
-      extraGroups = [
-        "dialout"
-        "input"
-      ];
-    };
-
-    services.phoniebox.settings = {
-      webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
-      playermpd.mpd_conf = lib.mkDefault "${S}/mpd.conf";
-    };
-
-    # /var/lib isn't writable by users, so create the top folder as root
-    systemd.tmpfiles.rules = [
-      "d ${S} 0755 ${cfg.user} ${config.users.users.${cfg.user}.group} -"
-    ];
-
-    systemd.user.services.phoniebox-upload = lib.mkIf cfg.copyparty.enable {
-      description = "copyparty upload for Phoniebox";
-      wantedBy = [ "default.target" ];
-      unitConfig.ConditionUser = cfg.user;
-      serviceConfig = {
-        ExecStart = "${pkgs.copyparty}/bin/copyparty -c ${copypartyConf} -c ${cfg.copyparty.accountsFile}";
-        Restart = "on-failure";
-      };
-    };
-
-    networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall (
-      [
-        cfg.webPort
-        5556
-        5557
-      ]
-      ++ lib.optional cfg.copyparty.enable cfg.copyparty.port
-    );
-
-    systemd.user.services.phoniebox-mpd = {
-      description = "MPD for Phoniebox";
-      wantedBy = [ "default.target" ];
-      wants = [ "pipewire-pulse.service" ];
-      after = [ "pipewire-pulse.service" ];
-      unitConfig.ConditionUser = cfg.user;
-      serviceConfig = {
-        ExecStart = "${pkgs.mpd}/bin/mpd --no-daemon --stderr ${mpdConf}";
-        Restart = "on-failure";
-      };
-    };
-
-    systemd.user.services.phoniebox = {
-      description = "Phoniebox jukebox daemon";
-      wantedBy = [ "default.target" ];
-      wants = [ "pipewire-pulse.service" ];
-      requires = [ "phoniebox-mpd.service" ];
-      after = [
-        "phoniebox-mpd.service"
-        "pipewire-pulse.service"
-      ];
-      unitConfig.ConditionUser = cfg.user;
-      environment.PHONIEBOX_STATE = S;
-      path = [
-        pkgs.coreutils
-        pkgs.yq-go
-      ];
-
-      preStart = ''
-        mkdir -p ${S}/src/jukebox ${S}/mpd ${S}/shared/{settings,audiofolders,playlists,cover-cache,logs}
-
-        # refreshed every start: these point into the store
-        ln -sfn ${share}/resources ${S}/resources
-        ln -sfn ${mpdConf} ${S}/mpd.conf
-
-        # declarative: always overwritten
-        install -m 644 ${rfidYaml} ${S}/shared/settings/rfid.yaml
-
-        J=${S}/shared/settings/jukebox.yaml
-
-        # first start: upstream defaults, untouched
-        [ -e "$J" ] || install -m 644 ${share}/resources/default-settings/jukebox.default.yaml "$J"
-
-        # every start: module-managed keys win
-        yq -i '. *= load("${settingsFile}")' "$J"
-      '';
-
-      serviceConfig = {
-        ExecStart = "${pkg}/bin/phoniebox-daemon";
-        Restart = "always";
-        RestartSec = 5;
-      };
-
-    };
-
-    services.caddy = {
-      enable = true;
-      virtualHosts.":${toString cfg.webPort}".extraConfig = ''
-        handle_path /cover-cache/* {
-          root * ${S}/shared/cover-cache
-          file_server
+    evdev.devices = lib.mkOption {
+      default = { };
+      description = "USB input devices (dials, keypads, arcade encoders) and their button mappings.";
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            name = lib.mkOption {
+              type = lib.types.str;
+              description = "Device name as shown by evtest.";
+            };
+            exact = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+              description = "Require an exact name match (safer when one device exposes several inputs).";
+            };
+            buttons = lib.mkOption {
+              default = { };
+              type = lib.types.attrsOf (
+                lib.types.submodule {
+                  options = {
+                    key = lib.mkOption {
+                      type = lib.types.int;
+                      description = "evdev key code, e.g. 115 for KEY_VOLUMEUP.";
+                    };
+                    action = lib.mkOption {
+                      type = settingsFormat.type;
+                      description = "RPC command, e.g. { alias = \"toggle\"; }.";
+                    };
+                  };
+                }
+              );
+            };
+          };
         }
-        handle_path /logs/* {
-          root * ${S}/shared/logs
-          file_server browse
-        }
-        handle {
-          root * ${pkg.webapp}
-          file_server
-        }
-      '';
-    };
-
-    services.phoniebox.copyparty = {
-      enable = true;
-      accountsFile = "/var/lib/phoniebox/copyparty-accounts.conf";
+      );
     };
 
   };
+
+  config = lib.mkIf cfg.enable (
+    lib.mkMerge [
+      {
+
+        users.users.${cfg.user} = {
+          linger = true;
+          extraGroups = [
+            "dialout"
+          ];
+        };
+
+        services.phoniebox.settings = {
+          webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
+          playermpd.mpd_conf = lib.mkDefault "${S}/mpd.conf";
+        };
+
+        # /var/lib isn't writable by users, so create the top folder as root
+        systemd.tmpfiles.rules = [
+          "d ${S} 0755 ${cfg.user} ${config.users.users.${cfg.user}.group} -"
+        ];
+
+        systemd.user.services.phoniebox-upload = lib.mkIf cfg.copyparty.enable {
+          description = "copyparty upload for Phoniebox";
+          wantedBy = [ "default.target" ];
+          unitConfig.ConditionUser = cfg.user;
+          serviceConfig = {
+            ExecStart = "${pkgs.copyparty}/bin/copyparty -c ${copypartyConf} -c ${cfg.copyparty.accountsFile}";
+            Restart = "on-failure";
+          };
+        };
+
+        networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall (
+          [
+            cfg.webPort
+            5556
+            5557
+          ]
+          ++ lib.optional cfg.copyparty.enable cfg.copyparty.port
+        );
+
+        systemd.user.services.phoniebox-mpd = {
+          description = "MPD for Phoniebox";
+          wantedBy = [ "default.target" ];
+          wants = [ "pipewire-pulse.service" ];
+          after = [ "pipewire-pulse.service" ];
+          unitConfig.ConditionUser = cfg.user;
+          serviceConfig = {
+            ExecStart = "${pkgs.mpd}/bin/mpd --no-daemon --stderr ${mpdConf}";
+            Restart = "on-failure";
+          };
+        };
+
+        systemd.user.services.phoniebox = {
+          description = "Phoniebox jukebox daemon";
+          wantedBy = [ "default.target" ];
+          wants = [ "pipewire-pulse.service" ];
+          requires = [ "phoniebox-mpd.service" ];
+          after = [
+            "phoniebox-mpd.service"
+            "pipewire-pulse.service"
+          ];
+          unitConfig.ConditionUser = cfg.user;
+          environment.PHONIEBOX_STATE = S;
+          path = [
+            pkgs.coreutils
+            pkgs.yq-go
+          ];
+
+          preStart = ''
+            mkdir -p ${S}/src/jukebox ${S}/mpd ${S}/shared/{settings,audiofolders,playlists,cover-cache,logs}
+
+            # refreshed every start: these point into the store
+            ln -sfn ${share}/resources ${S}/resources
+            ln -sfn ${mpdConf} ${S}/mpd.conf
+
+            # declarative: always overwritten
+            install -m 644 ${rfidYaml} ${S}/shared/settings/rfid.yaml
+
+            ${lib.optionalString hasEvdev "install -m 644 ${evdevFile} ${S}/shared/settings/evdev.yaml"}
+
+            # first start: upstream defaults, untouched
+            J=${S}/shared/settings/jukebox.yaml
+
+            [ -e "$J" ] || install -m 644 ${share}/resources/default-settings/jukebox.default.yaml "$J"
+
+            # every start: module-managed keys win
+            yq -i '. *= load("${settingsFile}")' "$J"
+          '';
+
+          serviceConfig = {
+            ExecStart = "${pkg}/bin/phoniebox-daemon";
+            Restart = "always";
+            RestartSec = 5;
+          };
+
+        };
+
+        services.caddy = {
+          enable = true;
+          virtualHosts.":${toString cfg.webPort}".extraConfig = ''
+            handle_path /cover-cache/* {
+              root * ${S}/shared/cover-cache
+              file_server
+            }
+            handle_path /logs/* {
+              root * ${S}/shared/logs
+              file_server browse
+            }
+            handle {
+              root * ${pkg.webapp}
+              file_server
+            }
+          '';
+        };
+
+        services.phoniebox.copyparty = {
+          enable = true;
+          accountsFile = "/var/lib/phoniebox/copyparty-accounts.conf";
+        };
+
+      }
+
+      (lib.mkIf hasEvdev {
+        users.users.${cfg.user}.extraGroups = [ "input" ];
+        services.phoniebox.settings = {
+          modules.named.event_devices = "controls.event_devices";
+          evdev = {
+            enable = true; # 'enable', not 'enabled' (the docs are wrong)
+            config_file = "../../shared/settings/evdev.yaml";
+          };
+        };
+      })
+    ]
+  );
 }
