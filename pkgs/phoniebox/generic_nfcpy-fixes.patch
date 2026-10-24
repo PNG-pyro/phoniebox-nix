@@ -1175,6 +1175,41 @@ index fedc57a..a17f4ea 100644
  export {
    initSockets,
    socketRequest,
+diff --git a/src/webapp/src/utils/request.js b/src/webapp/src/utils/request.js
+index b5dddf2..e8df5ca 100644
+--- a/src/webapp/src/utils/request.js
++++ b/src/webapp/src/utils/request.js
+@@ -1,16 +1,30 @@
+ import { socketRequest } from "../sockets";
+ import commands from "../commands";
+ 
++// Answers that don't change during a session, remembered so they're asked only once
++const CACHEABLE = new Set(['getAlbumCoverart', 'getSingleCoverArt']);
++const cache = new Map();
++
+ const request = async (command, kwargs = {}) => {
+   try {
+     if (!(command in commands)) {
+       throw new Error(`'${command}' does not exist in command object`);
+     }
+ 
++    const cacheKey = CACHEABLE.has(command) ? `${command}:${JSON.stringify(kwargs)}` : null;
++    if (cacheKey && cache.has(cacheKey)) {
++      return { result: cache.get(cacheKey) };
++    }
++
+     const { _package, plugin, method = null } = commands[command];
+ 
+     // Send request
+     const result = await socketRequest(_package, plugin, method, kwargs);
++
++    // CACHE_PENDING means "not extracted yet": don't remember that, so it's asked again later
++    if (cacheKey && result && result !== 'CACHE_PENDING') {
++      cache.set(cacheKey, result);
++    }
+     return { result };
+   }
+   catch (error) {
 diff --git a/src/webapp/src/utils/use-scroll-memory.js b/src/webapp/src/utils/use-scroll-memory.js
 new file mode 100644
 index 0000000..04f8694
