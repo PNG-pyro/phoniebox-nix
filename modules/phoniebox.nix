@@ -434,6 +434,7 @@ in
           environment.PHONIEBOX_STATE = S;
           path = [
             pkgs.coreutils
+            pkgs.espeak-ng
             pkgs.yq-go
             config.systemd.package
             "/run/wrappers"
