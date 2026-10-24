@@ -19,6 +19,7 @@ let
     generic_nfcpy = [ p.nfcpy ];
     generic_usb = [ ];
     rdm6300_serial = [ p.pyserial ];
+    pn532_i2c_py532 = [ (p.callPackage ../py532lib { }) ];
   };
 
   py = python3.withPackages (

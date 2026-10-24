@@ -199,6 +199,7 @@ in
                 "generic_nfcpy"
                 "generic_usb"
                 "rdm6300_serial"
+                "pn532_i2c_py532"
               ];
             };
             settings = lib.mkOption {
@@ -223,8 +224,11 @@ in
             lib.optional (
               lib.elem "generic_nfcpy" readerModules || lib.elem "rdm6300_serial" readerModules
             ) "dialout"
-            ++ lib.optional (lib.elem "generic_usb" readerModules) "input";
+            ++ lib.optional (lib.elem "generic_usb" readerModules) "input"
+            ++ lib.optional (lib.elem "pn532_i2c_py532" readerModules) "i2c";
         };
+
+        hardware.i2c.enable = lib.mkIf (lib.elem "pn532_i2c_py532" readerModules) (lib.mkDefault true);
 
         services.phoniebox.settings = {
           webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
