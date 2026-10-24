@@ -192,10 +192,6 @@ in
     )
   ];
 
-  warnings =
-    lib.optional (cfg.login.enable && cfg.openFirewall)
-      "services.phoniebox: the login only protects the web port; any other ports openFirewall opens (e.g. 5556/5557) bypass it.";
-
   options.services.phoniebox = {
 
     enable = lib.mkEnableOption "Phoniebox RFID jukebox";
@@ -610,13 +606,15 @@ in
 
       (lib.mkIf cfg.login.enable {
         environment.systemPackages = [ setPassword ];
-
         systemd.tmpfiles.rules = [
           "d ${loginDir} 0750 root ${config.services.caddy.group} -"
           # Always at least one file for the import to match, so it never depends
           # on Caddy accepting an import that matches nothing
           "f ${loginDir}/00-empty.caddy 0640 root ${config.services.caddy.group} -"
         ];
+        warnings =
+          lib.optional (cfg.login.enable && cfg.openFirewall)
+            "services.phoniebox: the login only protects the web port; any other ports openFirewall opens (e.g. 5556/5557) bypass it.";
       })
 
       (lib.mkIf cfg.display.enable {
