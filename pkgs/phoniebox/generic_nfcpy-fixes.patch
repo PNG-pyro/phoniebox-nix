@@ -1458,7 +1458,7 @@ index 1f55415..7b55c92 100644
    return <Link ref={ref} to={location} {...props} />
  });
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
-index 3be77fb..2cef24f 100644
+index 3be77fb..17e8bf0 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 @@ -1,5 +1,4 @@
@@ -1468,7 +1468,7 @@ index 3be77fb..2cef24f 100644
  
  import {
    IconButton,
-@@ -8,19 +7,34 @@ import {
+@@ -8,26 +7,41 @@ import {
    ListItemText,
  } from '@mui/material';
  
@@ -1506,7 +1506,24 @@ index 3be77fb..2cef24f 100644
  
    const playItem = () => {
      switch(type) {
-@@ -42,27 +56,120 @@ const FolderListItem = ({
+       case 'directory': return request('play_folder', { folder: relpath, recursive: true });
+       case 'file': return request('play_single', { song_url: relpath });
+-      // TODO: Add missing Podcast
+-      // TODO: Add missing Stream
++      case 'stream':
++      case 'podcast': return request('play_single', { song_url: relpath });
+       default: return;
+     }
+   }
+@@ -36,33 +50,126 @@ const FolderListItem = ({
+     switch(type) {
+       case 'directory': return registerMusicToCard('play_folder', { folder: relpath, recursive: true });
+       case 'file': return registerMusicToCard('play_single', { song_url: relpath });
+-      // TODO: Add missing Podcast
+-      // TODO: Add missing Stream
++      case 'stream':
++      case 'podcast': return registerMusicToCard('play_single', { song_url: relpath });
+       default: return;
      }
    }
  
