@@ -108,6 +108,9 @@ let
     pulse_sink_name = o.sink;
   };
 
+  displayPkg = pkgs.callPackage ../pkgs/phoniebox-display { };
+  i2cDevice = "dev-i2c\\x2d${toString cfg.display.bus}.device";
+
 in
 {
   options.services.phoniebox = {
@@ -155,6 +158,31 @@ in
         type = lib.types.str;
         default = "${cfg.stateDir}/copyparty-accounts.conf";
         description = "copyparty config file with an [accounts] section. Keep it out of the Nix store.";
+      };
+    };
+
+    display = {
+      enable = lib.mkEnableOption "an I2C OLED status display";
+      bus = lib.mkOption {
+        type = lib.types.int;
+        default = 1;
+        description = "I2C bus number (/dev/i2c-N).";
+      };
+      address = lib.mkOption {
+        type = lib.types.str;
+        default = "0x3C";
+      };
+      driver = lib.mkOption {
+        type = lib.types.enum [
+          "ssd1306"
+          "sh1106"
+        ];
+        default = "ssd1306";
+      };
+      timeout = lib.mkOption {
+        type = lib.types.int;
+        default = 6;
+        description = "Seconds before the screen goes dark.";
       };
     };
 
@@ -390,6 +418,51 @@ in
 
       (lib.mkIf (cfg.audio.secondary != null) {
         services.phoniebox.settings.pulse.outputs.secondary = toOutput cfg.audio.secondary;
+      })
+
+      (lib.mkIf cfg.display.enable {
+        hardware.i2c.enable = lib.mkDefault true;
+        users.users.${cfg.user}.extraGroups = [ "i2c" ];
+
+        # Let systemd track /dev/i2c-* so a service can wait for it
+        services.udev.extraRules = ''
+          SUBSYSTEM=="i2c-dev", TAG+="systemd"
+        '';
+
+        systemd.services.phoniebox-display = {
+          description = "Phoniebox OLED status display";
+          wantedBy = [ "sysinit.target" ];
+
+          # Start early: only wait for local disks and the I2C bus
+          unitConfig.DefaultDependencies = false;
+          after = [
+            "local-fs.target"
+            i2cDevice
+          ];
+          bindsTo = [ i2cDevice ];
+
+          # Stop late: after the user services (and the daemon) are gone
+          before = [
+            "user.slice"
+            "shutdown.target"
+          ];
+          conflicts = [ "shutdown.target" ];
+
+          environment = {
+            OLED_BUS = toString cfg.display.bus;
+            OLED_ADDRESS = cfg.display.address;
+            OLED_DRIVER = cfg.display.driver;
+            OLED_TIMEOUT = toString cfg.display.timeout;
+          };
+          path = [ config.systemd.package ]; # for the systemctl shutdown check
+
+          serviceConfig = {
+            ExecStart = "${displayPkg}/bin/phoniebox-display";
+            User = cfg.user;
+            Restart = "always";
+            RestartSec = 2;
+          };
+        };
       })
 
     ]
