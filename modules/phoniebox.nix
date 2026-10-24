@@ -28,19 +28,6 @@ let
   settingsFormat = pkgs.formats.yaml { };
   settingsFile = settingsFormat.generate "jukebox-overrides.yaml" cfg.settings;
 
-  # rfidYaml = (pkgs.formats.yaml { }).generate "rfid.yaml" {
-  #   rfid.readers.read_00 = {
-  #     module = "generic_nfcpy";
-  #     config.device_path = cfg.readerDevice;
-  #     same_id_delay = 1.0;
-  #     log_ignored_cards = false;
-  #     place_not_swipe = {
-  #       enabled = false;
-  #       card_removal_action.alias = "pause";
-  #     };
-  #   };
-  # };
-
   readerModules = lib.unique (lib.mapAttrsToList (_: r: r.module) cfg.readers);
 
   rfidYaml = settingsFormat.generate "rfid.yaml" {
@@ -91,6 +78,36 @@ let
 
   hasEvdev = cfg.evdev.devices != { };
 
+  outputType = lib.types.submodule {
+    options = {
+      sink = lib.mkOption {
+        type = lib.types.str;
+        description = "PipeWire/Pulse sink name, from `pactl list short sinks`.";
+      };
+      alias = lib.mkOption {
+        type = lib.types.str;
+        default = "Speakers";
+      };
+      volumeLimit = lib.mkOption {
+        type = lib.types.ints.between 0 100;
+        default = 100;
+        description = "Hard ceiling: the 0-100% range is scaled into 0..this. Not changeable from the web app.";
+      };
+      softMaxVolume = lib.mkOption {
+        type = lib.types.ints.between 0 100;
+        default = 100;
+        description = "Soft cap that can be changed temporarily from the web app.";
+      };
+    };
+  };
+
+  toOutput = o: {
+    inherit (o) alias;
+    volume_limit = o.volumeLimit;
+    soft_max_volume = o.softMaxVolume;
+    pulse_sink_name = o.sink;
+  };
+
 in
 {
   options.services.phoniebox = {
@@ -98,15 +115,25 @@ in
     enable = lib.mkEnableOption "Phoniebox RFID jukebox";
     user = lib.mkOption { type = lib.types.str; };
 
+    audio = {
+      startupVolume = lib.mkOption {
+        type = lib.types.nullOr (lib.types.ints.between 0 100);
+        default = null;
+      };
+      primary = lib.mkOption {
+        type = lib.types.nullOr outputType;
+        default = null;
+      };
+      secondary = lib.mkOption {
+        type = lib.types.nullOr outputType;
+        default = null;
+      };
+    };
+
     stateDir = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/phoniebox";
     };
-
-    # readerDevice = lib.mkOption {
-    #   type = lib.types.str;
-    #   default = "tty:USB0:pn532";
-    # };
 
     openFirewall = lib.mkOption {
       type = lib.types.bool;
@@ -347,6 +374,19 @@ in
           };
         };
       })
+
+      (lib.mkIf (cfg.audio.startupVolume != null) {
+        services.phoniebox.settings.pulse.startup_volume = cfg.audio.startupVolume;
+      })
+
+      (lib.mkIf (cfg.audio.primary != null) {
+        services.phoniebox.settings.pulse.outputs.primary = toOutput cfg.audio.primary;
+      })
+
+      (lib.mkIf (cfg.audio.secondary != null) {
+        services.phoniebox.settings.pulse.outputs.secondary = toOutput cfg.audio.secondary;
+      })
+
     ]
   );
 }
