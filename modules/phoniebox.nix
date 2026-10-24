@@ -111,6 +111,38 @@ let
   displayPkg = pkgs.callPackage ../pkgs/phoniebox-display { };
   i2cDevice = "dev-i2c\\x2d${toString cfg.display.bus}.device";
 
+  h = cfg.hotspot;
+  hotspotPrefix = lib.concatStringsSep "." (lib.take 3 (lib.splitString "." h.address));
+  hotspotFlag = "${S}/hotspot-disabled";
+
+  hostapdConf = pkgs.writeText "hostapd.conf" (
+    ''
+      interface=${h.interface}
+      driver=nl80211
+      ssid=${h.ssid}
+      hw_mode=g
+      channel=${toString h.channel}
+    ''
+    + lib.optionalString (h.password != null) ''
+      wpa=2
+      wpa_key_mgmt=WPA-PSK
+      rsn_pairwise=CCMP
+      wpa_passphrase=${h.password}
+    ''
+  );
+
+  dnsmasqConf = pkgs.writeText "hotspot-dnsmasq.conf" ''
+    interface=${h.interface}
+    bind-interfaces
+    no-resolv
+    # captive portal: every name points at the box
+    address=/#/${h.address}
+    dhcp-range=${hotspotPrefix}.10,${hotspotPrefix}.50,1h
+    dhcp-option=option:router,${h.address}
+    dhcp-option=114,"http://${h.address}/"
+    dhcp-authoritative
+  '';
+
 in
 {
   options.services.phoniebox = {
@@ -183,6 +215,40 @@ in
         type = lib.types.int;
         default = 6;
         description = "Seconds before the screen goes dark.";
+      };
+    };
+
+    hotspot = {
+      enable = lib.mkEnableOption "a setup hotspot when no known WiFi is available";
+      interface = lib.mkOption {
+        type = lib.types.str;
+        default = "wlan0";
+      };
+      ssid = lib.mkOption {
+        type = lib.types.str;
+        default = "Phoniebox-Setup";
+      };
+      password = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "WPA2 password (8+ characters), or null for an open network. Stored in the Nix store.";
+      };
+      channel = lib.mkOption {
+        type = lib.types.int;
+        default = 6;
+      };
+      address = lib.mkOption {
+        type = lib.types.str;
+        default = "10.42.0.1";
+      };
+      bootDelay = lib.mkOption {
+        type = lib.types.int;
+        default = 60;
+        description = "Seconds after boot before the first check.";
+      };
+      checkInterval = lib.mkOption {
+        type = lib.types.str;
+        default = "5min";
       };
     };
 
@@ -289,6 +355,14 @@ in
         services.phoniebox.settings = {
           webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
           playermpd.mpd_conf = lib.mkDefault "${S}/mpd.conf";
+
+          # Raspberry Pi OS workaround: makes the whole music library world-writable on
+          # every start. Not needed on NixOS, where permissions are already right.
+          playermpd.library.check_user_rights = lib.mkDefault false;
+
+          # Uses 'sudo iwconfig', which isn't available here; WiFi power saving is
+          # better set per host (e.g. networking.networkmanager.wifi.powersave).
+          host.wlan_power.disable_power_down = lib.mkDefault false;
         };
 
         # /var/lib isn't writable by users, so create the top folder as root
@@ -480,6 +554,111 @@ in
             RestartSec = 2;
           };
         };
+      })
+
+      (lib.mkIf h.enable {
+        systemd.services.autohotspot-ap = {
+          description = "Setup hotspot: access point";
+          wants = [ "autohotspot-dns.service" ];
+          path = [
+            pkgs.networkmanager
+            pkgs.iproute2
+          ];
+          preStart = ''
+            nmcli device set ${h.interface} managed no || true
+            ip addr flush dev ${h.interface}
+            ip addr add ${h.address}/24 dev ${h.interface}
+            ip link set ${h.interface} up
+          '';
+          postStop = ''
+            ip addr flush dev ${h.interface}
+            nmcli device set ${h.interface} managed yes || true
+          '';
+          serviceConfig = {
+            ExecStart = "${pkgs.hostapd}/bin/hostapd ${hostapdConf}";
+            Restart = "on-failure";
+            RestartSec = 5;
+          };
+        };
+
+        systemd.services.autohotspot-dns = {
+          description = "Setup hotspot: DHCP and captive DNS";
+          bindsTo = [ "autohotspot-ap.service" ];
+          after = [ "autohotspot-ap.service" ];
+          serviceConfig.ExecStart = "${pkgs.dnsmasq}/bin/dnsmasq --keep-in-foreground --conf-file=${dnsmasqConf}";
+        };
+
+        # The decision: hotspot or normal WiFi?
+        systemd.services.autohotspot = {
+          description = "Decide between WiFi client and setup hotspot";
+          serviceConfig.Type = "oneshot";
+          path = [
+            pkgs.networkmanager
+            pkgs.iw
+            pkgs.gnugrep
+            pkgs.coreutils
+            config.systemd.package
+          ];
+          script = ''
+            IFACE=${h.interface}
+            ap_running() { systemctl is-active --quiet autohotspot-ap.service; }
+            connected()  { nmcli -g GENERAL.STATE device show "$IFACE" 2>/dev/null | grep -q '^100'; }
+            stations()   { iw dev "$IFACE" station dump 2>/dev/null | grep -c '^Station' || true; }
+
+            # Switched off in the web app: make sure we're a normal client.
+            if [ -e ${hotspotFlag} ]; then
+              ap_running && systemctl stop autohotspot-ap.service
+              exit 0
+            fi
+
+            if ap_running; then
+              # Someone is on the setup page: don't pull the rug out.
+              [ "$(stations)" -gt 0 ] && exit 0
+              # Nobody here: give NetworkManager a minute to find a known network.
+              systemctl stop autohotspot-ap.service
+              for i in $(seq 30); do connected && exit 0; sleep 2; done
+              systemctl start autohotspot-ap.service
+            else
+              connected || systemctl start autohotspot-ap.service
+            fi
+          '';
+        };
+
+        systemd.timers.autohotspot = {
+          wantedBy = [ "timers.target" ];
+          unitConfig.ConditionPathExists = "!${hotspotFlag}";
+          timerConfig = {
+            OnBootSec = "${toString h.bootDelay}s";
+            OnUnitActiveSec = h.checkInterval;
+          };
+        };
+
+        # DHCP and DNS for hotspot clients
+        networking.firewall.interfaces.${h.interface} = {
+          allowedUDPPorts = [
+            53
+            67
+          ];
+          allowedTCPPorts = [ 53 ];
+        };
+
+        # Let the web app switch control the hotspot (exact commands only)
+        security.sudo.extraRules = [
+          {
+            users = [ cfg.user ];
+            commands =
+              map
+                (args: {
+                  command = "${config.systemd.package}/bin/systemctl ${args}";
+                  options = [ "NOPASSWD" ];
+                })
+                [
+                  "start autohotspot.timer"
+                  "stop autohotspot.timer"
+                  "--no-block start autohotspot.service"
+                ];
+          }
+        ];
       })
 
     ]

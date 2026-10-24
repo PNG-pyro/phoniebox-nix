@@ -1,3 +1,83 @@
+diff --git a/src/jukebox/components/hostif/linux/__init__.py b/src/jukebox/components/hostif/linux/__init__.py
+index a26152e..a1a042a 100644
+--- a/src/jukebox/components/hostif/linux/__init__.py
++++ b/src/jukebox/components/hostif/linux/__init__.py
+@@ -240,52 +240,40 @@ def get_autohotspot_status():
+ 
+     return status
+ 
++# Our hotspot: the flag file lives in the state folder (cwd is <state>/src/jukebox)
++HOTSPOT_FLAG = '../../hotspot-disabled'
++HOTSPOT_UNIT = '/etc/systemd/system/autohotspot.service'
++
++
++def _systemctl(*args):
++    subprocess.run(['sudo', 'systemctl', *args],
++                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
++
+ 
+ @plugin.register()
+ def stop_autohotspot():
+-    """Stop auto hotspot functionality
+-
+-    Stopping and disabling the timer and running the service one last time manually
+-    """
+-    if os.path.isfile("/etc/systemd/system/autohotspot.service"):
+-        # Stop timer
+-        subprocess.run(['sudo', '/usr/bin/systemctl', 'stop', 'autohotspot.timer'],
+-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+-        # Prevent start after system restart
+-        subprocess.run(['sudo', '/usr/bin/systemctl', 'disable', 'autohotspot.timer'],
+-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+-        # Prevent start after system restart (should always be disabled, but make sure)
+-        subprocess.run(['sudo', '/usr/bin/systemctl', 'disable', 'autohotspot.service'],
+-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+-
+-        subprocess.run(['sudo', '/usr/bin/systemctl', 'start', 'autohotspot.service'],
+-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+-
+-        return 'inactive'
+-    else:
++    """Stop the setup hotspot and keep it off across reboots"""
++    if not os.path.isfile(HOTSPOT_UNIT):
+         logger.info("Skipping since no autohotspot functionality is installed.")
+         return 'not-installed'
++    open(HOTSPOT_FLAG, 'w').close()
++    _systemctl('stop', 'autohotspot.timer')
++    _systemctl('--no-block', 'start', 'autohotspot.service')   # sees the flag, tears down
++    return 'inactive'
+ 
+ 
+ @plugin.register()
+ def start_autohotspot():
+-    """Start auto hotspot functionality
+-
+-    Enabling and starting the timer (timer will start the service)
+-    """
+-    if os.path.isfile("/etc/systemd/system/autohotspot.service"):
+-        # Enable start after system restart
+-        subprocess.run(['sudo', '/usr/bin/systemctl', 'enable', 'autohotspot.timer'],
+-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+-        # Start timer (starts the service immediately)
+-        subprocess.run(['sudo', '/usr/bin/systemctl', 'start', 'autohotspot.timer'],
+-                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+-
+-        return 'active'
+-    else:
++    """Re-enable the setup hotspot fallback"""
++    if not os.path.isfile(HOTSPOT_UNIT):
+         logger.info("Skipping since no autohotspot functionality is installed.")
+         return 'not-installed'
+-
++    try:
++        os.remove(HOTSPOT_FLAG)
++    except FileNotFoundError:
++        pass
++    _systemctl('start', 'autohotspot.timer')
++    return 'active'
+ 
+ # ---------------------------------------------------------------------------
+ # RPi-only stuff
 diff --git a/src/jukebox/components/rfid/hardware/generic_nfcpy/generic_nfcpy.py b/src/jukebox/components/rfid/hardware/generic_nfcpy/generic_nfcpy.py
 index 4b6ac00..20b7c57 100644
 --- a/src/jukebox/components/rfid/hardware/generic_nfcpy/generic_nfcpy.py
