@@ -252,6 +252,12 @@ in
       };
     };
 
+    webappPackage = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.callPackage ../pkgs/phoniebox-webapp { phoniebox = cfg.package; };
+      description = "The built web app. Architecture-independent, so an x86-built copy works on any board.";
+    };
+
     package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.callPackage ../pkgs/phoniebox { readers = readerModules; };
@@ -493,7 +499,7 @@ in
                 file_server browse
               }
               handle {
-                root * ${pkg.webapp}
+                root * ${cfg.webappPackage}
                 file_server
               }
             '';

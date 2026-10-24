@@ -12,7 +12,7 @@ buildNpmPackage {
   src = "${phoniebox.src}/src/webapp";
   nodejs = nodejs_22;
 
-  npmDepsHash = ""; # first build prints the real one
+  npmDepsHash = "sha256-cTlTT7WeQwLxFl+rL7vheUB4hqR4CwaAsyfLaPfrOLI="; # first build prints the real one
 
   # Web app patches go here later (paths relative to src/webapp)
   patches = [ ];
