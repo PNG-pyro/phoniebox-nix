@@ -7,7 +7,9 @@
   zeromq,
   readers ? [ "generic_nfcpy" ],
 }:
+
 let
+  zeromqDrafts = zeromq.override { enableDrafts = true; };
 
   readerDeps = p: {
     generic_nfcpy = [ p.nfcpy ];
@@ -17,21 +19,8 @@ let
 
   py = python3.withPackages (
     p:
+    with p;
     [
-      # your pyzmq override and core packages, minus nfcpy
-    ]
-    ++ lib.concatMap (
-      r: (readerDeps p).${r} or (throw "phoniebox: no packaging for reader module '${r}' yet")
-    ) readers
-  );
-
-  rev = "4fa84fd50750fd4b52984d51aa7c95466cf5b241"; # your existing pin
-  upstreamVersion = "3.6.0";
-
-  zeromqDrafts = zeromq.override { enableDrafts = true; };
-
-  py = python3.withPackages (
-    p: with p; [
       ((pyzmq.override { zeromq = zeromqDrafts; }).overridePythonAttrs (old: {
         env = (old.env or { }) // {
           ZMQ_DRAFT_API = "1";
@@ -48,8 +37,12 @@ let
       tornado
       paho-mqtt
     ]
+    ++ lib.concatMap (
+      r: (readerDeps p).${r} or (throw "phoniebox: no packaging for reader module '${r}' yet")
+    ) readers
   );
 in
+
 stdenvNoCC.mkDerivation {
   pname = "phoniebox";
   version = "3-unstable";
