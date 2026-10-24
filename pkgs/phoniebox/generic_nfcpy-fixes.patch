@@ -797,6 +797,199 @@ index b239181..db2a348 100644
        </Grid>
      </Grid>
    );
+diff --git a/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js b/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js
+index 0f22d2d..d8ae790 100644
+--- a/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js
++++ b/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js
+@@ -1,14 +1,17 @@
+-import React from 'react';
++import React, { useState } from 'react';
+ import { useTranslation } from 'react-i18next';
+ 
+ import {
++  IconButton,
+   ListItem,
+   ListItemButton,
+   ListItemText,
+ } from '@mui/material';
++import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+ 
+ import { toHHMMSS } from '../../../../../utils/utils';
+ import request from '../../../../../utils/request'
++import AddToPlaylistDialog from '../../../add-to-playlist-dialog';
+ 
+ const SongListItem = ({
+   isSelecting,
+@@ -16,6 +19,7 @@ const SongListItem = ({
+   song,
+ }) => {
+   const { t } = useTranslation();
++  const [dialogOpen, setDialogOpen] = useState(false);
+ 
+   const command = 'play_single';
+   const {
+@@ -34,17 +38,37 @@ const SongListItem = ({
+   );
+ 
+   return (
+-    <ListItem disablePadding>
+-      <ListItemButton
+-        role={undefined}
+-        onClick={() => (isSelecting ? registerSongToCard() : playSingle())}
++    <>
++      <ListItem
++        disablePadding
++        secondaryAction={
++          isSelecting
++            ? undefined
++            : <IconButton
++                edge="end"
++                aria-label="Add to playlist"
++                onClick={() => setDialogOpen(true)}
++              >
++                <PlaylistAddIcon />
++              </IconButton>
++        }
+       >
+-        <ListItemText
+-          primary={title || t('library.albums.unknown-title')}
+-          secondary={`${artist || t('library.albums.unknown-artist')} • ${toHHMMSS(duration)}`}
+-        />
+-      </ListItemButton>
+-    </ListItem>
++        <ListItemButton
++          role={undefined}
++          onClick={() => (isSelecting ? registerSongToCard() : playSingle())}
++        >
++          <ListItemText
++            primary={title || t('library.albums.unknown-title')}
++            secondary={`${artist || t('library.albums.unknown-artist')} • ${toHHMMSS(duration)}`}
++          />
++        </ListItemButton>
++      </ListItem>
++      <AddToPlaylistDialog
++        open={dialogOpen}
++        onClose={() => setDialogOpen(false)}
++        item={{ song_url: file }}
++      />
++    </>
+   );
+ }
+ 
+diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
+index 3be77fb..a135352 100644
+--- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
++++ b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
+@@ -1,4 +1,4 @@
+-import React from 'react';
++import React, { useState } from 'react';
+ import { useTranslation } from 'react-i18next';
+ 
+ import {
+@@ -9,8 +9,10 @@ import {
+ } from '@mui/material';
+ 
+ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
++import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+ 
+ import request from '../../../../utils/request';
++import AddToPlaylistDialog from '../../add-to-playlist-dialog';
+ import FolderLink from './folder-link';
+ import FolderTypeAvatar from './folder-type-avatar';
+ 
+@@ -20,6 +22,7 @@ const FolderListItem = ({
+   registerMusicToCard,
+ }) => {
+   const { t } = useTranslation();
++  const [dialogOpen, setDialogOpen] = useState(false);
+   const { type, name, relpath } = folder;
+ 
+   const playItem = () => {
+@@ -42,27 +45,65 @@ const FolderListItem = ({
+     }
+   }
+ 
++  // What "add to playlist" sends for this entry (null: can't be added)
++  const playlistItem = (() => {
++    switch(type) {
++      case 'directory': return { folder: relpath, recursive: true };
++      case 'file': return { song_url: relpath };
++      default: return null;
++    }
++  })();
++
++  const showAdd = !isSelecting && playlistItem !== null;
++  const isDirectory = type === 'directory';
++
+   return (
+-    <ListItem
+-      disablePadding
+-      secondaryAction={
+-        type === 'directory'
+-          ? <IconButton
+-              component={FolderLink}
+-              data={{ dir: relpath }}
+-              edge="end"
+-              aria-label={t('library.folders.show-folder-content')}
+-            >
+-              <NavigateNextIcon />
+-            </IconButton>
+-          : undefined
++    <>
++      <ListItem
++        disablePadding
++        secondaryAction={
++          (showAdd || isDirectory)
++            ? <>
++                {showAdd &&
++                  <IconButton
++                    edge={isDirectory ? false : 'end'}
++                    aria-label="Add to playlist"
++                    onClick={() => setDialogOpen(true)}
++                  >
++                    <PlaylistAddIcon />
++                  </IconButton>
++                }
++                {isDirectory &&
++                  <IconButton
++                    component={FolderLink}
++                    data={{ dir: relpath }}
++                    edge="end"
++                    aria-label={t('library.folders.show-folder-content')}
++                  >
++                    <NavigateNextIcon />
++                  </IconButton>
++                }
++              </>
++            : undefined
++        }
++      >
++        <ListItemButton
++          onClick={() => (isSelecting ? registerItemToCard() : playItem())}
++          // two buttons on the right need more room than the default
++          sx={showAdd && isDirectory ? { pr: 12 } : undefined}
++        >
++          <FolderTypeAvatar type={type} />
++          <ListItemText primary={name} />
++        </ListItemButton>
++      </ListItem>
++      {playlistItem &&
++        <AddToPlaylistDialog
++          open={dialogOpen}
++          onClose={() => setDialogOpen(false)}
++          item={playlistItem}
++        />
+       }
+-    >
+-      <ListItemButton onClick={() => (isSelecting ? registerItemToCard() : playItem())}>
+-        <FolderTypeAvatar type={type} />
+-        <ListItemText primary={name} />
+-      </ListItemButton>
+-    </ListItem>
++    </>
+   );
+ }
+ 
 diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
 index 3727b94..0dfbe58 100644
 --- a/src/webapp/src/components/Navigation/index.js
