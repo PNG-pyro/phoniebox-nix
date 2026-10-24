@@ -304,6 +304,34 @@ index 5a78207..0c87f3a 100644
      'play_single': {
          'title': 'Play a single song triggered by card swipe',
          'note': "This function plays the content of a given song URL",
+diff --git a/src/webapp/src/commands/index.js b/src/webapp/src/commands/index.js
+index 1e98499..7858f9b 100644
+--- a/src/webapp/src/commands/index.js
++++ b/src/webapp/src/commands/index.js
+@@ -269,6 +269,23 @@ const commands = {
+     plugin: 'say_my_ip',
+     argKeys: ['option'],
+   },
++    getWifiStatus: {
++    _package: 'host',
++    plugin: 'get_wifi_status',
++  },
++  scanWifi: {
++    _package: 'host',
++    plugin: 'scan_wifi',
++  },
++  connectWifi: {
++    _package: 'host',
++    plugin: 'connect_wifi',
++    argKeys: ['ssid', 'password'],
++  },
++  getWifiConnectState: {
++    _package: 'host',
++    plugin: 'get_wifi_connect_state',
++  },
+ 
+   // Misc
+   getAppSettings: {
 diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
 index 3727b94..0dfbe58 100644
 --- a/src/webapp/src/components/Navigation/index.js
@@ -331,6 +359,28 @@ index 3727b94..0dfbe58 100644
      </BottomNavigation>
    );
  }
+diff --git a/src/webapp/src/components/Settings/index.js b/src/webapp/src/components/Settings/index.js
+index 75ce784..65be0cd 100644
+--- a/src/webapp/src/components/Settings/index.js
++++ b/src/webapp/src/components/Settings/index.js
+@@ -4,6 +4,7 @@ import { Grid } from '@mui/material';
+ 
+ import SettingsAudio from './audio/index';
+ import SettingsAutoHotspot from './autohotspot';
++import SettingsWifi from './wifi';
+ import SettingsGeneral from './general';
+ import SettingsSecondSwipe from './secondswipe';
+ import SettingsStatus from './status/index';
+@@ -44,6 +45,9 @@ const Settings = () => {
+       <Grid item>
+         <SettingsSecondSwipe />
+       </Grid>
++      <Grid item>
++        <SettingsWifi />
++      </Grid>
+       <Grid item>
+         <SettingsAutoHotspot />
+       </Grid>
 diff --git a/src/webapp/src/config.js b/src/webapp/src/config.js
 index 46a6ec1..a47b125 100644
 --- a/src/webapp/src/config.js
