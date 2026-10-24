@@ -616,6 +616,101 @@ index 1e98499..c287385 100644
  
    // Misc
    getAppSettings: {
+diff --git a/src/webapp/src/components/Cards/controls/actions/play-music/index.js b/src/webapp/src/components/Cards/controls/actions/play-music/index.js
+index 2e8d733..d01bb1c 100644
+--- a/src/webapp/src/components/Cards/controls/actions/play-music/index.js
++++ b/src/webapp/src/components/Cards/controls/actions/play-music/index.js
+@@ -1,5 +1,6 @@
+ import React from 'react';
+ import { useTranslation } from 'react-i18next';
++import { getPlaylistName } from '../../../../../utils/playlists';
+ 
+ import {
+   createSearchParams,
+@@ -30,6 +31,8 @@ const SelectPlayMusic = ({
+   const { command } = getActionAndCommand(actionData);
+   const values = getArgsValues(actionData);
+ 
++  const isPlaylist = command === 'play_folder' && getPlaylistName(values?.[0]) !== null;
++
+   const selectMusic = () => {
+     const searchParams = createSearchParams({
+       isSelecting: true,
+@@ -46,10 +49,12 @@ const SelectPlayMusic = ({
+     <Grid container>
+       {command &&
+         <Grid item xs={12}>
+-          <Typography>
+-            {t(`cards.controls.actions.play-music.commands.${command}`)}
++         <Typography>
++            {isPlaylist
++              ? 'Play playlist'
++              : t(`cards.controls.actions.play-music.commands.${command}`)}
+           </Typography>
+-        </Grid>
++         </Grid>
+       }
+       <Grid item xs={12}>
+         {command === 'play_album' && <SelectedAlbum values={values} />}
+diff --git a/src/webapp/src/components/Cards/controls/actions/play-music/selected-folder.js b/src/webapp/src/components/Cards/controls/actions/play-music/selected-folder.js
+index 3191c36..cae4fab 100644
+--- a/src/webapp/src/components/Cards/controls/actions/play-music/selected-folder.js
++++ b/src/webapp/src/components/Cards/controls/actions/play-music/selected-folder.js
+@@ -1,30 +1,42 @@
+ import React from 'react';
+-import { List } from '@mui/material';
+ 
+ import {
++  Avatar,
++  List,
+   ListItem,
++  ListItemAvatar,
+   ListItemText,
+ } from '@mui/material';
++import QueueMusicIcon from '@mui/icons-material/QueueMusic';
+ 
+ import NoMusicSelected from './no-music-selected';
+ import FolderTypeAvatar from '../../../../Library/lists/folders/folder-type-avatar';
++import { getPlaylistName } from '../../../../../utils/playlists';
+ 
+ const SelectedFolder = ({ values: [folder] }) => {
+   // TODO: Implement type correctly
+   const type = 'directory';
+ 
+-  if (folder) {
+-    return (
+-      <List sx={{ width: '100%', margin: '10px' }}>
+-        <ListItem disablePadding>
+-          <FolderTypeAvatar type={type} />
+-          <ListItemText primary={folder} />
+-        </ListItem>
+-      </List>
+-    );
+-  }
++  if (!folder) return <NoMusicSelected />;
+ 
+-  return <NoMusicSelected />
++  const playlistName = getPlaylistName(folder);
++
++  return (
++    <List sx={{ width: '100%', margin: '10px' }}>
++      <ListItem disablePadding>
++        {playlistName
++          ? <ListItemAvatar>
++              <Avatar><QueueMusicIcon /></Avatar>
++            </ListItemAvatar>
++          : <FolderTypeAvatar type={type} />
++        }
++        <ListItemText
++          primary={playlistName || folder}
++          secondary={playlistName ? 'Playlist' : null}
++        />
++      </ListItem>
++    </List>
++  );
+ };
+ 
+ export default SelectedFolder;
 diff --git a/src/webapp/src/components/Library/add-to-playlist-dialog.js b/src/webapp/src/components/Library/add-to-playlist-dialog.js
 new file mode 100644
 index 0000000..95b028c
@@ -1440,10 +1535,10 @@ index 3222e42..8fbf099 100644
        )}
      </List>
 diff --git a/src/webapp/src/components/Library/lists/folders/index.js b/src/webapp/src/components/Library/lists/folders/index.js
-index fa05325..8075a15 100644
+index fa05325..499a35a 100644
 --- a/src/webapp/src/components/Library/lists/folders/index.js
 +++ b/src/webapp/src/components/Library/lists/folders/index.js
-@@ -8,20 +8,30 @@ import {
+@@ -8,20 +8,25 @@ import {
  } from "@mui/material";
  
  import request from '../../../../utils/request';
@@ -1452,12 +1547,7 @@ index fa05325..8075a15 100644
  
  import { ROOT_DIR } from '../../../../config';
  
-+// Playlists live at Playlists/<name>; returns <name>, or null for any other folder
-+const getPlaylistName = (dir) => {
-+  const path = decodeURIComponent(dir).replace(/^\.\//, '');
-+  const match = path.match(/^Playlists\/([^/]+)$/);
-+  return match ? match[1] : null;
-+};
++import { getPlaylistName } from '../../../../utils/playlists';
 +
  const Folders = ({
    musicFilter,
@@ -1474,7 +1564,7 @@ index fa05325..8075a15 100644
  
    const search = ({ name }) => {
      if (musicFilter === '') return true;
-@@ -31,23 +41,45 @@ const Folders = ({
+@@ -31,23 +36,45 @@ const Folders = ({
      return name.toLowerCase().includes(lowerCaseMusicFilter);
    };
  
@@ -1529,11 +1619,11 @@ index fa05325..8075a15 100644
 +  const filteredFolders = numberedFolders.filter(search);
 +
 +  // Editing only inside a playlist, and not while searching
-+  const playlistName = musicFilter ? null : getPlaylistName(dir);
++  const playlistName = musicFilter ? null : getPlaylistName(decodeURIComponent(dir));
  
    if (isLoading) return <CircularProgress />;
    if (error) return <Typography>{t('library.loading-error')}</Typography>;
-@@ -56,12 +88,18 @@ const Folders = ({
+@@ -56,12 +83,18 @@ const Folders = ({
    }
  
    return (
@@ -2211,6 +2301,20 @@ index fedc57a..a17f4ea 100644
  export {
    initSockets,
    socketRequest,
+diff --git a/src/webapp/src/utils/playlists.js b/src/webapp/src/utils/playlists.js
+new file mode 100644
+index 0000000..e99ea42
+--- /dev/null
++++ b/src/webapp/src/utils/playlists.js
+@@ -0,0 +1,8 @@
++// Playlists live at Playlists/<name>.
++// Returns <name> for a playlist folder path, or null for anything else.
++export const getPlaylistName = (path) => {
++  if (!path) return null;
++  const clean = path.replace(/^\.\//, '');
++  const match = clean.match(/^Playlists\/([^/]+)\/?$/);
++  return match ? match[1] : null;
++};
 diff --git a/src/webapp/src/utils/request.js b/src/webapp/src/utils/request.js
 index b5dddf2..5b2cdb3 100644
 --- a/src/webapp/src/utils/request.js
