@@ -428,7 +428,7 @@ index 4b6ac00..20b7c57 100644
          self._keep_running = True
  
 diff --git a/src/jukebox/components/rpc_command_alias.py b/src/jukebox/components/rpc_command_alias.py
-index 5a78207..0c87f3a 100644
+index 5a78207..ed2ac06 100644
 --- a/src/jukebox/components/rpc_command_alias.py
 +++ b/src/jukebox/components/rpc_command_alias.py
 @@ -23,7 +23,7 @@ cmd_alias_definitions = {
@@ -440,6 +440,15 @@ index 5a78207..0c87f3a 100644
      'play_single': {
          'title': 'Play a single song triggered by card swipe',
          'note': "This function plays the content of a given song URL",
+@@ -35,7 +35,7 @@ cmd_alias_definitions = {
+         'note': "This function plays the content of a given folder URL",
+         'package': 'player',
+         'plugin': 'ctrl',
+-        'method': 'play_folder'},
++        'method': 'play_card'},
+     'play': {
+         'package': 'player',
+         'plugin': 'ctrl',
 diff --git a/src/webapp/src/commands/index.js b/src/webapp/src/commands/index.js
 index 1e98499..79117f4 100644
 --- a/src/webapp/src/commands/index.js
@@ -617,7 +626,7 @@ index 0000000..95b028c
 +
 +export default AddToPlaylistDialog;
 diff --git a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js b/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
-index b239181..3340991 100644
+index b239181..db2a348 100644
 --- a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
 +++ b/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
 @@ -1,4 +1,6 @@
@@ -653,17 +662,17 @@ index b239181..3340991 100644
 +                  aria-label="Add to playlist"
 +                  onClick={() => setDialogOpen(true)}
 +                  disabled={disabled}
-+                  size="large"
++                  sx={{ fontSize: 40 }}
 +                >
-+                  <PlaylistAddIcon style={{ fontSize: 40 }} />
++                  <PlaylistAddIcon fontSize="inherit" />
 +                </IconButton>
 +                <IconButton
 +                  aria-label="Play"
 +                  onClick={playAlbum}
 +                  disabled={disabled}
-+                  size="large"
++                  sx={{ fontSize: 64 }}
 +                >
-+                  <PlayCircleFilledRoundedIcon color="primary" style={{ fontSize: 64 }} />
++                  <PlayCircleFilledRoundedIcon color="primary" fontSize="inherit" />
 +                </IconButton>
 +              </>
              : <Button
