@@ -186,7 +186,7 @@ index a26152e..9eba8d0 100644
 +def get_wifi_connect_state():
 +    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..b26899c 100644
+index 86dbc60..95cd31b 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
 @@ -87,6 +87,7 @@ import threading
@@ -523,9 +523,9 @@ index 86dbc60..b26899c 100644
 +                entry['playable'] = self._folder_is_playable(relpath)
 +
 +    def _folder_is_playable(self, relpath):
-+        """A folder is playable if it holds a playlist, or MPD knows any song under it"""
++        """A folder is playable if it holds a playlist, stream, or podcast, or MPD knows any song under it"""
 +        try:
-+            if any(f.lower().endswith('.m3u') for f in os.listdir(os.path.join(self.music_library_path, relpath))):
++            if any(f.lower().endswith(('.m3u', 'livestream.txt', 'podcast.txt')) for f in os.listdir(os.path.join(self.music_library_path, relpath))):
 +                return True
 +        except OSError:
 +            return False
