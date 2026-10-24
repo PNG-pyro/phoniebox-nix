@@ -6,7 +6,7 @@
 }:
 let
   cfg = config.services.phoniebox;
-  pkg = pkgs.callPackage ../pkgs/phoniebox { };
+  pkg = cfg.package;
   share = "${pkg}/share/phoniebox";
   S = cfg.stateDir;
 
@@ -88,6 +88,10 @@ in
         type = lib.types.str;
         description = "copyparty config file with an [accounts] section. Keep it out of the Nix store.";
       };
+    };
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.callPackage ../pkgs/phoniebox { };
     };
   };
 
