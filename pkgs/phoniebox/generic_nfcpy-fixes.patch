@@ -186,7 +186,7 @@ index a26152e..9eba8d0 100644
 +def get_wifi_connect_state():
 +    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..a6d784e 100644
+index 86dbc60..8941e14 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
 @@ -152,10 +152,13 @@ class PlayerMPD:
@@ -443,7 +443,31 @@ index 86dbc60..a6d784e 100644
      @plugs.tag
      def get_single_coverart(self, song_url):
          mp3_file_path = Path(components.player.get_music_library_path(), song_url).expanduser()
-@@ -640,6 +859,8 @@ class PlayerMPD:
+@@ -629,17 +848,29 @@ class PlayerMPD:
+ 
+             plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
+             plc.parse(folder, recursive)
++
+             uri = '--unset--'
++            added, skipped = 0, 0
+             try:
+                 for uri in plc:
+-                    self.mpd_client.addid(uri)
+-            except mpd.base.CommandError as e:
+-                logger.error(f"{e.__class__.__qualname__}: {e} at uri {uri}")
++                    try:
++                        self.mpd_client.addid(uri)
++                        added += 1
++                    except mpd.base.CommandError as e:
++                        # MPD refused this file (e.g. a non-music file the playlist
++                        # generator didn't exclude): skip it and carry on
++                        skipped += 1
++                        logger.warning(f"Skipping '{uri}': {e}")
+             except Exception as e:
++                # Anything else (e.g. lost connection to MPD) still stops here
+                 logger.error(f"{e.__class__.__qualname__}: {e} at uri {uri}")
++            if skipped:
++                logger.info(f"Play folder '{folder}': queued {added}, skipped {skipped}")
  
              self.music_player_status['player_status']['last_played_folder'] = folder
  
@@ -452,7 +476,7 @@ index 86dbc60..a6d784e 100644
              self.current_folder_status = self.music_player_status['audio_folder_status'].get(folder)
              if self.current_folder_status is None:
                  self.current_folder_status = self.music_player_status['audio_folder_status'][folder] = {}
-@@ -662,6 +883,8 @@ class PlayerMPD:
+@@ -662,6 +893,8 @@ class PlayerMPD:
              self.mpd_client.clear()
              self.mpd_retry_with_mutex(self.mpd_client.findadd, 'albumartist', albumartist, 'album', album)
              self.mpd_client.play()
