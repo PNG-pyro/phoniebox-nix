@@ -186,7 +186,7 @@ index a26152e..9eba8d0 100644
 +def get_wifi_connect_state():
 +    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..d4d115b 100644
+index 86dbc60..8734178 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
 @@ -152,10 +152,13 @@ class PlayerMPD:
@@ -204,7 +204,7 @@ index 86dbc60..d4d115b 100644
          self.end_of_playlist_next_action = utils.get_config_action(cfg,
                                                                     'playermpd',
                                                                     'end_of_playlist_next_action',
-@@ -256,6 +259,25 @@ class PlayerMPD:
+@@ -256,6 +259,129 @@ class PlayerMPD:
                                                           custom_action['args'],
                                                           custom_action['kwargs'])
  
@@ -227,10 +227,114 @@ index 86dbc60..d4d115b 100644
 +        self.decode_2nd_swipe_option()
 +        return alias
 +
++    # --- Playlists (phoniebox-nix) -------------------------------------------
++    PLAYLIST_ROOT = 'Playlists'
++
++    @property
++    def music_library_path(self):
++        """The music folder, as the rest of the player resolves it"""
++        return os.path.expanduser(components.player.get_music_library_path())
++
++    def _playlist_dir(self, name):
++        name = (name or '').strip()
++        if not name or '/' in name or name.startswith('.'):
++            raise ValueError(f"Invalid playlist name: '{name}'")
++        return os.path.join(self.music_library_path, self.PLAYLIST_ROOT, name)
++
++    @staticmethod
++    def _playlist_file(playlist_dir, name):
++        existing = sorted(f for f in os.listdir(playlist_dir) if f.lower().endswith('.m3u'))
++        return os.path.join(playlist_dir, existing[0] if existing else f'{name}.m3u')
++
++    @plugs.tag
++    def list_playlists(self):
++        """Names of the playlists in the Playlists folder"""
++        root = os.path.join(self.music_library_path, self.PLAYLIST_ROOT)
++        if not os.path.isdir(root):
++            return []
++        return sorted(d for d in os.listdir(root)
++                      if os.path.isdir(os.path.join(root, d))
++                      and any(f.lower().endswith('.m3u') for f in os.listdir(os.path.join(root, d))))
++
++    @plugs.tag
++    def create_playlist(self, name: str):
++        """Create an empty playlist: Playlists/<name>/<name>.m3u"""
++        playlist_dir = self._playlist_dir(name)
++        name = name.strip()
++        if os.path.exists(playlist_dir):
++            raise FileExistsError(f"Playlist '{name}' already exists")
++        os.makedirs(playlist_dir)
++        with open(os.path.join(playlist_dir, f'{name}.m3u'), 'w', encoding='utf-8') as f:
++            f.write('#EXTM3U\n')
++        return name
++
++    def _resolve_songs(self, song_url=None, folder=None, albumartist=None, album=None):
++        """Library-relative paths of the songs a library item stands for"""
++        if song_url:
++            return [song_url]
++        if folder is not None:
++            entries = self.mpd_retry_with_mutex(self.mpd_client.listall, folder)
++            return sorted(e['file'] for e in entries if 'file' in e)
++        if album is not None:
++            if albumartist:
++                songs = self.mpd_retry_with_mutex(self.mpd_client.find, 'albumartist', albumartist, 'album', album)
++            else:
++                songs = self.mpd_retry_with_mutex(self.mpd_client.find, 'album', album)
++
++            def num(value):
++                # MPD tags can be '3', '3/12' or a list of those
++                if isinstance(value, list):
++                    value = value[0] if value else ''
++                try:
++                    return int(str(value).split('/')[0])
++                except ValueError:
++                    return 0
++
++            songs = sorted(songs, key=lambda s: (num(s.get('disc', 0)), num(s.get('track', 0)), s['file']))
++            return [s['file'] for s in songs]
++        raise ValueError('Nothing to add')
++
++    @plugs.tag
++    def add_to_playlist(self, name: str, song_url=None, folder=None, albumartist=None, album=None, recursive=True):
++        """Append a song, folder or album to a playlist, skipping songs already in it"""
++        playlist_dir = self._playlist_dir(name)
++        if not os.path.isdir(playlist_dir):
++            raise FileNotFoundError(f"Playlist '{name}' doesn't exist")
++        playlist_file = self._playlist_file(playlist_dir, name.strip())
++        songs = self._resolve_songs(song_url, folder, albumartist, album)
++
++        content = ''
++        if os.path.exists(playlist_file):
++            with open(playlist_file, encoding='utf-8') as f:
++                content = f.read()
++        existing = {os.path.normpath(os.path.join(playlist_dir, line.strip()))
++                    for line in content.splitlines()
++                    if line.strip() and not line.startswith('#')}
++
++        new_lines, skipped = [], 0
++        for song in songs:
++            absolute = os.path.normpath(os.path.join(self.music_library_path, song))
++            if absolute in existing:
++                skipped += 1
++                continue
++            existing.add(absolute)
++            # m3u paths are relative to the playlist file's own folder
++            new_lines.append(os.path.relpath(absolute, playlist_dir))
++
++        if new_lines:
++            with open(playlist_file, 'a', encoding='utf-8') as f:
++                if not content:
++                    f.write('#EXTM3U\n')
++                elif not content.endswith('\n'):
++                    f.write('\n')
++                f.write(''.join(line + '\n' for line in new_lines))
++        return {'added': len(new_lines), 'skipped': skipped}
++
++
      def mpd_retry_with_mutex(self, mpd_cmd, *args):
          """
          This method adds thread saftey for acceses to mpd via a mutex lock,
-@@ -577,6 +599,18 @@ class PlayerMPD:
+@@ -577,6 +703,18 @@ class PlayerMPD:
  
              self.play_folder(folder, recursive)
  
@@ -249,7 +353,7 @@ index 86dbc60..d4d115b 100644
      @plugs.tag
      def get_single_coverart(self, song_url):
          mp3_file_path = Path(components.player.get_music_library_path(), song_url).expanduser()
-@@ -640,6 +674,8 @@ class PlayerMPD:
+@@ -640,6 +778,8 @@ class PlayerMPD:
  
              self.music_player_status['player_status']['last_played_folder'] = folder
  
@@ -258,7 +362,7 @@ index 86dbc60..d4d115b 100644
              self.current_folder_status = self.music_player_status['audio_folder_status'].get(folder)
              if self.current_folder_status is None:
                  self.current_folder_status = self.music_player_status['audio_folder_status'][folder] = {}
-@@ -662,6 +698,8 @@ class PlayerMPD:
+@@ -662,6 +802,8 @@ class PlayerMPD:
              self.mpd_client.clear()
              self.mpd_retry_with_mutex(self.mpd_client.findadd, 'albumartist', albumartist, 'album', album)
              self.mpd_client.play()
@@ -337,7 +441,7 @@ index 5a78207..0c87f3a 100644
          'title': 'Play a single song triggered by card swipe',
          'note': "This function plays the content of a given song URL",
 diff --git a/src/webapp/src/commands/index.js b/src/webapp/src/commands/index.js
-index 1e98499..afff284 100644
+index 1e98499..79117f4 100644
 --- a/src/webapp/src/commands/index.js
 +++ b/src/webapp/src/commands/index.js
 @@ -114,6 +114,17 @@ const commands = {
@@ -358,7 +462,7 @@ index 1e98499..afff284 100644
  
    // Volume
    setVolume: {
-@@ -269,6 +280,23 @@ const commands = {
+@@ -269,6 +280,42 @@ const commands = {
      plugin: 'say_my_ip',
      argKeys: ['option'],
    },
@@ -379,9 +483,204 @@ index 1e98499..afff284 100644
 +    _package: 'host',
 +    plugin: 'get_wifi_connect_state',
 +  },
++
++  // Playlists stuff
++  listPlaylists: {
++    _package: 'player',
++    plugin: 'ctrl',
++    method: 'list_playlists',
++  },
++  createPlaylist: {
++    _package: 'player',
++    plugin: 'ctrl',
++    method: 'create_playlist',
++    argKeys: ['name'],
++  },
++  addToPlaylist: {
++    _package: 'player',
++    plugin: 'ctrl',
++    method: 'add_to_playlist',
++    argKeys: ['name', 'song_url', 'folder', 'albumartist', 'album', 'recursive'],
++  },
  
    // Misc
    getAppSettings: {
+diff --git a/src/webapp/src/components/Library/add-to-playlist-dialog.js b/src/webapp/src/components/Library/add-to-playlist-dialog.js
+new file mode 100644
+index 0000000..95b028c
+--- /dev/null
++++ b/src/webapp/src/components/Library/add-to-playlist-dialog.js
+@@ -0,0 +1,105 @@
++import React, { useEffect, useState } from 'react';
++
++import {
++  Alert,
++  Button,
++  Dialog,
++  DialogActions,
++  DialogContent,
++  DialogTitle,
++  List,
++  ListItemButton,
++  ListItemIcon,
++  ListItemText,
++  TextField,
++} from '@mui/material';
++import AddIcon from '@mui/icons-material/Add';
++import QueueMusicIcon from '@mui/icons-material/QueueMusic';
++
++import request from '../../utils/request';
++
++// `item` is what the library item would play, e.g. { song_url } or { albumartist, album }
++const AddToPlaylistDialog = ({ open, onClose, item }) => {
++  const [playlists, setPlaylists] = useState([]);
++  const [isCreating, setIsCreating] = useState(false);
++  const [newName, setNewName] = useState('');
++  const [message, setMessage] = useState(null); // { severity, text }
++
++  // Fresh start each time the dialog opens
++  useEffect(() => {
++    if (!open) return;
++    setMessage(null);
++    setIsCreating(false);
++    setNewName('');
++    const load = async () => {
++      const { result, error } = await request('listPlaylists');
++      if (result) setPlaylists(result);
++      if (error) console.error(error);
++    };
++    load();
++  }, [open]);
++
++  const showError = (error) => setMessage({
++    severity: 'error',
++    text: String(error?.message || error),
++  });
++
++  const addTo = async (name) => {
++    const { result, error } = await request('addToPlaylist', { name, ...item });
++    if (error) return showError(error);
++    const skipped = result.skipped ? ` (${result.skipped} already in it)` : '';
++    setMessage({
++      severity: 'success',
++      text: `Added ${result.added} song${result.added === 1 ? '' : 's'} to ${name}${skipped}`,
++    });
++  };
++
++  const create = async () => {
++    const name = newName.trim();
++    if (!name) return;
++    const { error } = await request('createPlaylist', { name });
++    if (error) return showError(error);
++    setPlaylists((current) => [...current, name].sort());
++    setIsCreating(false);
++    setNewName('');
++    await addTo(name);
++  };
++
++  return (
++    <Dialog open={open} onClose={onClose} fullWidth>
++      <DialogTitle>Add to playlist</DialogTitle>
++      <DialogContent>
++        {message && <Alert severity={message.severity} sx={{ mb: 1 }}>{message.text}</Alert>}
++        <List>
++          {isCreating
++            ? <TextField
++                autoFocus
++                fullWidth
++                variant="standard"
++                label="New playlist name"
++                value={newName}
++                onChange={(e) => setNewName(e.target.value)}
++                onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
++              />
++            : <ListItemButton onClick={() => setIsCreating(true)}>
++                <ListItemIcon><AddIcon /></ListItemIcon>
++                <ListItemText primary="New playlist…" />
++              </ListItemButton>
++          }
++          {playlists.map((name) => (
++            <ListItemButton key={name} onClick={() => addTo(name)}>
++              <ListItemIcon><QueueMusicIcon /></ListItemIcon>
++              <ListItemText primary={name} />
++            </ListItemButton>
++          ))}
++        </List>
++      </DialogContent>
++      <DialogActions>
++        {isCreating && <Button onClick={create} disabled={!newName.trim()}>Create &amp; add</Button>}
++        <Button onClick={onClose}>Close</Button>
++      </DialogActions>
++    </Dialog>
++  );
++};
++
++export default AddToPlaylistDialog;
+diff --git a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js b/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
+index b239181..3340991 100644
+--- a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
++++ b/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
+@@ -1,4 +1,6 @@
+-import React from 'react';
++import React, { useState } from 'react';
++import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
++import AddToPlaylistDialog from '../../../add-to-playlist-dialog';
+ import { useTranslation } from 'react-i18next';
+ 
+ import {
+@@ -19,6 +21,7 @@ const SongListControls = ({
+ }) => {
+   const { t } = useTranslation();
+   const command = 'play_album';
++  const [dialogOpen, setDialogOpen] = useState(false);
+ 
+   const playAlbum = () => (
+     request(command, { albumartist, album })
+@@ -38,14 +41,24 @@ const SongListControls = ({
+       >
+         {
+           !isSelecting
+-            ? <IconButton
+-                aria-label="Play"
+-                onClick={playAlbum}
+-                disabled={disabled}
+-                size="large"
+-              >
+-                <PlayCircleFilledRoundedIcon color="primary" style={{ fontSize: 64 }} />
+-              </IconButton>
++            ? <>
++                <IconButton
++                  aria-label="Add to playlist"
++                  onClick={() => setDialogOpen(true)}
++                  disabled={disabled}
++                  size="large"
++                >
++                  <PlaylistAddIcon style={{ fontSize: 40 }} />
++                </IconButton>
++                <IconButton
++                  aria-label="Play"
++                  onClick={playAlbum}
++                  disabled={disabled}
++                  size="large"
++                >
++                  <PlayCircleFilledRoundedIcon color="primary" style={{ fontSize: 64 }} />
++                </IconButton>
++              </>
+             : <Button
+                 variant="outlined"
+                 onClick={registerAlbumToCard}
+@@ -54,6 +67,11 @@ const SongListControls = ({
+                 {t('library.albums.assign-to-card')}
+               </Button>
+         }
++        <AddToPlaylistDialog
++          open={dialogOpen}
++          onClose={() => setDialogOpen(false)}
++          item={{ albumartist, album }}
++        />
+       </Grid>
+     </Grid>
+   );
 diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
 index 3727b94..0dfbe58 100644
 --- a/src/webapp/src/components/Navigation/index.js
