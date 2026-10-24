@@ -79,36 +79,52 @@ index a26152e..a1a042a 100644
  # ---------------------------------------------------------------------------
  # RPi-only stuff
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..fd4fc29 100644
+index 86dbc60..43a29ca 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
-@@ -577,6 +577,21 @@ class PlayerMPD:
+@@ -156,6 +156,8 @@ class PlayerMPD:
+         self.second_swipe_action = None
+         self.decode_2nd_swipe_option()
  
++        self._last_album_card = None # (albumartist, album) of the last album card; memory only
++
+         self.end_of_playlist_next_action = utils.get_config_action(cfg,
+                                                                    'playermpd',
+                                                                    'end_of_playlist_next_action',
+@@ -578,6 +580,18 @@ class PlayerMPD:
              self.play_folder(folder, recursive)
  
-+    @plugs.tag
+     @plugs.tag
 +    def play_album_card(self, albumartist: str, album: str):
 +        """Like play_album, but with second-swipe detection (used by RFID cards)"""
-+        key = f"album:{albumartist}/{album}"
-+        with self.mpd_lock:
-+            is_second_swipe = self.music_player_status['player_status']['last_played_folder'] == key
-+        if self.second_swipe_action is not None and is_second_swipe:
++        key = (albumartist, album)
++        if self.second_swipe_action is not None and self._last_album_card == key:
 +            logger.debug('Calling second swipe action (album)')
 +            self.second_swipe_action()
 +        else:
 +            logger.debug('Calling first swipe action (album)')
 +            self.play_album(albumartist, album)
-+            with self.mpd_lock:
-+                self.music_player_status['player_status']['last_played_folder'] = key
++            self._last_album_card = key
 +
-     @plugs.tag
++     @plugs.tag
      def get_single_coverart(self, song_url):
          mp3_file_path = Path(components.player.get_music_library_path(), song_url).expanduser()
-@@ -662,6 +677,7 @@ class PlayerMPD:
+         cache_filename = self.coverart_cache_manager.get_cache_filename(mp3_file_path)
+@@ -640,6 +654,8 @@ class PlayerMPD:
+ 
+             self.music_player_status['player_status']['last_played_folder'] = folder
+ 
++            self._last_album_card = None
++
+             self.current_folder_status = self.music_player_status['audio_folder_status'].get(folder)
+             if self.current_folder_status is None:
+                 self.current_folder_status = self.music_player_status['audio_folder_status'][folder] = {}
+@@ -662,6 +678,8 @@ class PlayerMPD:
              self.mpd_client.clear()
              self.mpd_retry_with_mutex(self.mpd_client.findadd, 'albumartist', albumartist, 'album', album)
              self.mpd_client.play()
 +            self.music_player_status['player_status']['last_played_folder'] = ''
++            self._last_album_card = None
  
      @plugs.tag
      def queue_load(self, folder):
