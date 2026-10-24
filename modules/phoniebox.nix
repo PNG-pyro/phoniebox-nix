@@ -327,7 +327,7 @@ in
           };
         };
 
-        systemd.user.services.phoniebox = {
+        systemd.user.services.jukebox-daemon = {
           description = "Phoniebox jukebox daemon";
           wantedBy = [ "default.target" ];
           wants = [ "pipewire-pulse.service" ];
@@ -335,6 +335,7 @@ in
           after = [
             "phoniebox-mpd.service"
             "pipewire-pulse.service"
+            "pipewire.service"
           ];
           unitConfig.ConditionUser = cfg.user;
           environment.PHONIEBOX_STATE = S;
@@ -368,6 +369,7 @@ in
             ExecStart = "${pkg}/bin/phoniebox-daemon";
             Restart = "always";
             RestartSec = 5;
+            TimeoutStopSec = 10;
           };
 
         };
