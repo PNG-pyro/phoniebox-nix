@@ -625,6 +625,34 @@ index 0000000..95b028c
 +};
 +
 +export default AddToPlaylistDialog;
+diff --git a/src/webapp/src/components/Library/lists/albums/index.js b/src/webapp/src/components/Library/lists/albums/index.js
+index 3e915a9..5d6c343 100644
+--- a/src/webapp/src/components/Library/lists/albums/index.js
++++ b/src/webapp/src/components/Library/lists/albums/index.js
+@@ -1,5 +1,6 @@
+ import React, { useEffect, useState } from "react";
+ import { useTranslation } from 'react-i18next';
++import useScrollMemory from '../../../../utils/use-scroll-memory';
+ 
+ import {
+   CircularProgress,
+@@ -18,6 +19,8 @@ const Albums = ({ musicFilter }) => {
+   const [error, setError] = useState(null);
+   const [isLoading, setIsLoading] = useState(true);
+ 
++  const scrollRef = useScrollMemory('library-albums-scroll', !isLoading);
++
+   const search = ({ albumartist, album }) => {
+     if (musicFilter === '') return true;
+ 
+@@ -42,6 +45,7 @@ const Albums = ({ musicFilter }) => {
+ 
+   return (
+     <>
++      <div ref={scrollRef} />
+       {isLoading
+         ? <CircularProgress />
+         : <AlbumList
 diff --git a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js b/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
 index b239181..db2a348 100644
 --- a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
@@ -1147,3 +1175,73 @@ index fedc57a..a17f4ea 100644
  export {
    initSockets,
    socketRequest,
+diff --git a/src/webapp/src/utils/use-scroll-memory.js b/src/webapp/src/utils/use-scroll-memory.js
+new file mode 100644
+index 0000000..78009ee
+--- /dev/null
++++ b/src/webapp/src/utils/use-scroll-memory.js
+@@ -0,0 +1,64 @@
++import { useEffect, useRef } from 'react';
++
++// Walk up from an element to the nearest ancestor that actually scrolls
++const findScrollParent = (element) => {
++  let node = element && element.parentElement;
++  while (node) {
++    const { overflowY } = window.getComputedStyle(node);
++    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
++      return node;
++    }
++    node = node.parentElement;
++  }
++  return document.scrollingElement;
++};
++
++// Remembers how far a list was scrolled (per browser tab) and restores it once `ready` is true.
++// Returns a ref: attach it to an element inside the list, e.g. <div ref={scrollRef} />
++const useScrollMemory = (key, ready) => {
++  const anchorRef = useRef(null);
++
++  useEffect(() => {
++    if (!ready || !anchorRef.current) return undefined;
++    const scroller = findScrollParent(anchorRef.current);
++    if (!scroller) return undefined;
++
++    // Restore, one frame later so the list has been laid out
++    let saved = null;
++    try {
++      saved = sessionStorage.getItem(key);
++    } catch (error) {
++      // storage unavailable (e.g. private mode); just don't restore
++    }
++    if (saved !== null) {
++      requestAnimationFrame(() => { scroller.scrollTop = Number(saved); });
++    }
++
++    // Save while scrolling, at most once per frame
++    let frame = null;
++    const onScroll = () => {
++      if (frame) return;
++      frame = requestAnimationFrame(() => {
++        frame = null;
++        // Skip if the list is being torn down (its marker is gone),
++        // so leaving the page can't overwrite the position with 0
++        if (!anchorRef.current || !anchorRef.current.isConnected) return;
++        try {
++          sessionStorage.setItem(key, String(scroller.scrollTop));
++        } catch (error) {
++          // ignore
++        }
++      });
++    };
++
++    scroller.addEventListener('scroll', onScroll, { passive: true });
++    return () => {
++      scroller.removeEventListener('scroll', onScroll);
++      if (frame) cancelAnimationFrame(frame);
++    };
++  }, [key, ready]);
++
++  return anchorRef;
++};
++
++export default useScrollMemory;
