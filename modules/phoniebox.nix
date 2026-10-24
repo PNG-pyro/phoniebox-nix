@@ -57,6 +57,7 @@ let
       p: ${toString cfg.copyparty.port}
       no-thumb
       q
+      rp-loc: /upload
 
     [/music]
       ${S}/shared/audiofolders
@@ -497,6 +498,15 @@ in
               handle_path /logs/* {
                 root * ${S}/shared/logs
                 file_server browse
+              }
+              handle_path /rpc* {
+                reverse_proxy localhost:5556
+              }
+              handle_path /pub* {
+                reverse_proxy localhost:5557
+              }
+              handle /upload* {
+                reverse_proxy localhost:${toString cfg.copyparty.port}
               }
               handle {
                 root * ${cfg.webappPackage}

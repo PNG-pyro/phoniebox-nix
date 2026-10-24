@@ -67,6 +67,7 @@ stdenvNoCC.mkDerivation {
     share=$out/share/phoniebox
     mkdir -p $share/src $share/shared/settings
     cp -r src/jukebox $share/src/
+    ${py}/bin/python -m compileall -q $share/src/jukebox
     cp -r resources $share/
     cp resources/default-settings/logger.default.yaml $share/shared/settings/logger.yaml
 

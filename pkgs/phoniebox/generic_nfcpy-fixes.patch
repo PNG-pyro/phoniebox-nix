@@ -197,3 +197,46 @@ index 5a78207..0c87f3a 100644
      'play_single': {
          'title': 'Play a single song triggered by card swipe',
          'note': "This function plays the content of a given song URL",
+diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
+index 3727b94..0dfbe58 100644
+--- a/src/webapp/src/components/Navigation/index.js
++++ b/src/webapp/src/components/Navigation/index.js
+@@ -8,6 +8,7 @@ import BookmarksIcon from '@mui/icons-material/Bookmarks';
+ import HomeIcon from '@mui/icons-material/Home';
+ import MusicNoteIcon from '@mui/icons-material/MusicNote';
+ import SettingsIcon from '@mui/icons-material/Settings';
++import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+ 
+ export default function Navigation() {
+   const { t } = useTranslation();
+@@ -60,6 +61,14 @@ export default function Navigation() {
+         label={t('navigation.settings')}
+         icon={<SettingsIcon />}
+       />
++      <BottomNavigationAction
++        component="a"
++        href="/upload/"
++        target="_blank"
++        rel="noopener"
++        label="Upload"
++        icon={<CloudUploadIcon />}
++      />
+     </BottomNavigation>
+   );
+ }
+diff --git a/src/webapp/src/config.js b/src/webapp/src/config.js
+index 46a6ec1..a47b125 100644
+--- a/src/webapp/src/config.js
++++ b/src/webapp/src/config.js
+@@ -2,8 +2,9 @@ const HOST = (window.location.hostname === 'localhost') ?
+   '0.0.0.0' :
+   window.location.hostname;
+ 
+-const REQRES_ENDPOINT = `ws://${HOST}:5556`;
+-const PUBSUB_ENDPOINT = `ws://${HOST}:5557`;
++const WS_PROTO = window.location.protocol === 'https:' ? 'wss' : 'ws';
++const REQRES_ENDPOINT = `${WS_PROTO}://${window.location.host}/rpc`;
++const PUBSUB_ENDPOINT = `${WS_PROTO}://${window.location.host}/pub`;
+ 
+ const SUBSCRIPTIONS = [
+   'batt_status',
