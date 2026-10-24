@@ -94,6 +94,7 @@ Fixes and additions to upstream Phoniebox v3:
 - Cover art: cached in the browser session, loaded only for albums on screen, retried while the daemon is still extracting it
 - Library: Albums / Playlists / Folders switch, playlist view with editing, "add to playlist" everywhere, play buttons on rows, tap-to-open folders
 - Settings: WiFi section, working second-swipe selection
+- Upload: Integrates [copyparty](https://github.com/9001/copyparty) for direct uploads to the library folder.
 - Smaller things: remembers your scroll position, sticky library header, upload link, layout and dialog fixes
 
 **System (via the module)**
