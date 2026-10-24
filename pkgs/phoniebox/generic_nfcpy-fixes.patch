@@ -169,15 +169,15 @@ index 4b6ac00..20b7c57 100644
          self._keep_running = True
  
 diff --git a/src/jukebox/components/rpc_command_alias.py b/src/jukebox/components/rpc_command_alias.py
-index 5a78207..e796306 100644
+index 5a78207..0c87f3a 100644
 --- a/src/jukebox/components/rpc_command_alias.py
 +++ b/src/jukebox/components/rpc_command_alias.py
-@@ -17,7 +17,7 @@ cmd_alias_definitions = {
-         'note': "This function you'll want to use most often",
+@@ -23,7 +23,7 @@ cmd_alias_definitions = {
+         'note': "This function plays the content of a given album",
          'package': 'player',
          'plugin': 'ctrl',
--        'method': 'play_card'},
+-        'method': 'play_album'},
 +        'method': 'play_album_card'},
-     'play_album': {
-         'title': 'Play Album triggered by card swipe',
-         'note': "This function plays the content of a given album",
+     'play_single': {
+         'title': 'Play a single song triggered by card swipe',
+         'note': "This function plays the content of a given song URL",
