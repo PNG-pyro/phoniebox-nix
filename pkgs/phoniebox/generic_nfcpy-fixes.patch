@@ -727,6 +727,97 @@ index 0000000..95b028c
 +};
 +
 +export default AddToPlaylistDialog;
+diff --git a/src/webapp/src/components/Library/library-header.js b/src/webapp/src/components/Library/library-header.js
+index ab894f2..1bb7972 100644
+--- a/src/webapp/src/components/Library/library-header.js
++++ b/src/webapp/src/components/Library/library-header.js
+@@ -9,10 +9,9 @@ import { useTranslation } from 'react-i18next';
+ import {
+   Grid,
+   IconButton,
+-  Stack,
+-  Switch,
+   TextField,
+-  Typography,
++  ToggleButton,
++  ToggleButtonGroup,
+ } from "@mui/material";
+ 
+ import SearchIcon from '@mui/icons-material/Search';
+@@ -24,12 +23,14 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter }) => {
+   const { t } = useTranslation();
+   const [showSearchInput, setShowSearchInput] = useState(false);
+ 
+-  const getCurrentView = () => (
+-    view.startsWith('folders') ? 'folders' : 'albums'
+-  );
++  const getCurrentView = () => {
++    if (view.startsWith('folders')) return 'folders';
++    if (view.startsWith('playlists')) return 'playlists';
++    return 'albums';
++  };
+ 
+-  const toggleView = () => {
+-    const path = view.startsWith('folders') ? 'albums' : 'folders';
++  const changeView = (event, path) => {
++    if (!path) return; // tapped the view that's already selected
+     localStorage.setItem('libraryLastListView', path);
+     navigate(`${path}${urlSearch}`);
+   };
+@@ -57,41 +58,30 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter }) => {
+             id="library-search"
+             label={t('library.header.search-label')}
+             onChange={handleMusicFilter}
++            onBlur={() => { if (!musicFilter) setShowSearchInput(false); }}
+             value={musicFilter}
+             variant="outlined"
+             size="small"
+             autoFocus
+-            focused
+             sx={{
+               width: '100%',
+             }}
+           />
+         }
+         {!showSearchInput &&
+-          <Stack
+-            alignItems="center"
+-            direction="row"
++          <ToggleButtonGroup
++            value={getCurrentView()}
++            exclusive
++            onChange={changeView}
++            size="small"
++            color="primary"
++            aria-label={t('library.header.toggle-label')}
+             sx={{ marginRight: '5px' }}
+           >
+-            <Typography
+-              color={getCurrentView() === 'albums' && 'primary'}
+-              sx={{ transition: 'color .25s' }}
+-            >
+-              {t('library.header.albums')}
+-            </Typography>
+-            <Switch
+-              checked={getCurrentView() === 'folders' ? true : false}
+-              onChange={toggleView}
+-              inputProps={{ 'aria-label': t('library.header.toggle-label') }}
+-              color="default"
+-            />
+-            <Typography
+-              color={getCurrentView() === 'folders' && 'primary'}
+-              sx={{ transition: 'color .25s' }}
+-            >
+-              {t('library.header.folders')}
+-            </Typography>
+-          </Stack>
++            <ToggleButton value="albums">{t('library.header.albums')}</ToggleButton>
++            <ToggleButton value="playlists">Playlists</ToggleButton>
++            <ToggleButton value="folders">{t('library.header.folders')}</ToggleButton>
++          </ToggleButtonGroup>
+         }
+       </Grid>
+     </Grid>
 diff --git a/src/webapp/src/components/Library/lists/albums/album-list/album-list-item.js b/src/webapp/src/components/Library/lists/albums/album-list/album-list-item.js
 index 71f6ba3..c7d5999 100644
 --- a/src/webapp/src/components/Library/lists/albums/album-list/album-list-item.js
@@ -963,6 +1054,28 @@ index 0f22d2d..d8ae790 100644
    );
  }
  
+diff --git a/src/webapp/src/components/Library/lists/folders/folder-link.js b/src/webapp/src/components/Library/lists/folders/folder-link.js
+index 1f55415..7b55c92 100644
+--- a/src/webapp/src/components/Library/lists/folders/folder-link.js
++++ b/src/webapp/src/components/Library/lists/folders/folder-link.js
+@@ -5,12 +5,15 @@ import {
+ } from 'react-router-dom';
+ 
+ const FolderLink = forwardRef((props, ref) => {
+-  const { search: urlSearch } = useLocation();
++  const { pathname, search: urlSearch } = useLocation();
+   const { data } = props;
+   const dir = encodeURIComponent(data?.dir);
+ 
+   // TODO: Introduce fallback incase artist or album are undefined
+-  const location = `/library/folders/${dir}${urlSearch}`;
++
++  // Stay in the view we're in: folders or playlists
++  const view = pathname.startsWith('/library/playlists') ? 'playlists' : 'folders';
++  const location = `/library/${view}/${dir}${urlSearch}`;
+ 
+   return <Link ref={ref} to={location} {...props} />
+ });
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 index 3be77fb..f07a6c5 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
@@ -1129,10 +1242,14 @@ index 3be77fb..f07a6c5 100644
  }
  
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list.js b/src/webapp/src/components/Library/lists/folders/folder-list.js
-index 3222e42..633cc0d 100644
+index 3222e42..8fbf099 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-list.js
-@@ -18,6 +18,8 @@ const FolderList = ({
+@@ -15,16 +15,19 @@ import { ROOT_DIR } from '../../../../config';
+ 
+ const FolderList = ({
+   dir,
++  topDir,
    folders,
    isSelecting,
    registerMusicToCard,
@@ -1141,7 +1258,15 @@ index 3222e42..633cc0d 100644
  }) => {
    const { t } = useTranslation();
  
-@@ -48,6 +50,8 @@ const FolderList = ({
+   const getParentDir = (dir) => {
+     const decodedDir = decodeURIComponent(dir);
+ 
+-    if (decodedDir === ROOT_DIR) return undefined;
++    if (decodedDir === ROOT_DIR || decodedDir === topDir) return undefined;
+ 
+     const parentDir = dropLast(1, decodedDir.split('/')).join('/') || ROOT_DIR;
+     return parentDir;
+@@ -48,6 +51,8 @@ const FolderList = ({
            folder={folder}
            isSelecting={isSelecting}
            registerMusicToCard={registerMusicToCard}
@@ -1151,10 +1276,10 @@ index 3222e42..633cc0d 100644
        )}
      </List>
 diff --git a/src/webapp/src/components/Library/lists/folders/index.js b/src/webapp/src/components/Library/lists/folders/index.js
-index fa05325..d47e334 100644
+index fa05325..8075a15 100644
 --- a/src/webapp/src/components/Library/lists/folders/index.js
 +++ b/src/webapp/src/components/Library/lists/folders/index.js
-@@ -8,10 +8,18 @@ import {
+@@ -8,20 +8,30 @@ import {
  } from "@mui/material";
  
  import request from '../../../../utils/request';
@@ -1173,7 +1298,11 @@ index fa05325..d47e334 100644
  const Folders = ({
    musicFilter,
    isSelecting,
-@@ -22,6 +30,7 @@ const Folders = ({
+   registerMusicToCard,
++  topDir = ROOT_DIR,
+ }) => {
+   const { t } = useTranslation();
+   const { dir = ROOT_DIR } = useParams();
    const [folders, setFolders] = useState([]);
    const [error, setError] = useState(null);
    const [isLoading, setIsLoading] = useState(true);
@@ -1181,7 +1310,7 @@ index fa05325..d47e334 100644
  
    const search = ({ name }) => {
      if (musicFilter === '') return true;
-@@ -31,23 +40,45 @@ const Folders = ({
+@@ -31,23 +41,45 @@ const Folders = ({
      return name.toLowerCase().includes(lowerCaseMusicFilter);
    };
  
@@ -1240,7 +1369,7 @@ index fa05325..d47e334 100644
  
    if (isLoading) return <CircularProgress />;
    if (error) return <Typography>{t('library.loading-error')}</Typography>;
-@@ -56,12 +87,17 @@ const Folders = ({
+@@ -56,12 +88,18 @@ const Folders = ({
    }
  
    return (
@@ -1254,6 +1383,7 @@ index fa05325..d47e334 100644
 +      <div ref={scrollRef} />
 +      <FolderList
 +        dir={dir}
++        topDir={topDir}
 +        folders={filteredFolders}
 +        isSelecting={isSelecting}
 +        registerMusicToCard={registerMusicToCard}
@@ -1264,6 +1394,71 @@ index fa05325..d47e334 100644
    );
  };
  
+diff --git a/src/webapp/src/components/Library/lists/index.js b/src/webapp/src/components/Library/lists/index.js
+index e2b7a2d..f63cf3b 100644
+--- a/src/webapp/src/components/Library/lists/index.js
++++ b/src/webapp/src/components/Library/lists/index.js
+@@ -9,6 +9,7 @@ import {
+ } from 'react-router-dom';
+ 
+ import {
++  Box,
+   Grid,
+ } from '@mui/material';
+ 
+@@ -46,12 +47,24 @@ const LibraryLists = () => {
+ 
+   return (
+     <Grid container id="library">
+-      {isSelecting && <SelectorHeader />}
+-      <Grid container sx={{ padding: '10px' }}>
+-        <LibraryHeader
+-          handleMusicFilter={handleMusicFilter}
+-          musicFilter={musicFilter}
+-        />
++      <Box
++        sx={{
++          position: 'sticky',
++          top: 0,
++          zIndex: 1000,
++          width: '100%',
++          bgcolor: 'background.default',
++        }}
++      >
++        {isSelecting && <SelectorHeader />}
++        <Box sx={{ padding: '10px 10px 0' }}>
++          <LibraryHeader
++            handleMusicFilter={handleMusicFilter}
++            musicFilter={musicFilter}
++          />
++        </Box>
++      </Box>
++      <Grid container sx={{ padding: '0 10px 10px' }}>
+         <Grid
+           container
+           spacing={1}
+@@ -90,6 +103,21 @@ const LibraryLists = () => {
+                 />
+               }
+             />
++           <Route
++              path="playlists"
++              element={<Navigate to={`Playlists${urlSearch}`} replace />}
++            />
++            <Route
++              path="playlists/:dir"
++              element={
++                <Folders
++                  musicFilter={musicFilter}
++                  isSelecting={isSelecting}
++                  registerMusicToCard={registerMusicToCard}
++                  topDir="Playlists"
++                />
++              }
++            />
+           </Routes>
+         </Grid>
+       </Grid>
 diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
 index 3727b94..0dfbe58 100644
 --- a/src/webapp/src/components/Navigation/index.js
