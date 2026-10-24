@@ -2,9 +2,11 @@
   stdenvNoCC,
   fetchFromGitHub,
   fetchzip,
+  applyPatches,
   makeWrapper,
   python3,
   zeromq,
+  lib,
   readers ? [ "generic_nfcpy" ],
 }:
 
@@ -20,6 +22,17 @@ let
     generic_usb = [ ];
     rdm6300_serial = [ p.pyserial ];
     pn532_i2c_py532 = [ (p.callPackage ../py532lib { }) ];
+  };
+
+  patchedSrc = applyPatches {
+    name = "phoniebox-source";
+    src = fetchFromGitHub {
+      owner = "MiczFlor";
+      repo = "RPi-Jukebox-RFID";
+      inherit rev;
+      hash = "sha256-mRTTY/R4Bh9zlsejxJjNt/bgdS3YiySUFg7f2Z6gKuM=";
+    };
+    patches = [ ./generic_nfcpy-fixes.patch ]; # or whatever you've renamed it to
   };
 
   py = python3.withPackages (
@@ -52,14 +65,14 @@ stdenvNoCC.mkDerivation {
   pname = "phoniebox";
   version = "3-unstable";
 
-  src = fetchFromGitHub {
-    owner = "MiczFlor";
-    repo = "RPi-Jukebox-RFID";
-    inherit rev;
-    hash = "sha256-mRTTY/R4Bh9zlsejxJjNt/bgdS3YiySUFg7f2Z6gKuM="; # same as your dev flake
-  };
+  # src = fetchFromGitHub {
+  #   owner = "MiczFlor";
+  #   repo = "RPi-Jukebox-RFID";
+  #   inherit rev;
+  #   hash = "sha256-mRTTY/R4Bh9zlsejxJjNt/bgdS3YiySUFg7f2Z6gKuM="; # same as your dev flake
+  # };
 
-  patches = [ ./generic_nfcpy-fixes.patch ];
+  src = patchedSrc;
   nativeBuildInputs = [ makeWrapper ];
   dontBuild = true;
 
