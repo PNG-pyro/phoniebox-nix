@@ -61,6 +61,9 @@ let
       q
       rp-loc: /upload
       lo: ${cfg.stateDir}/copyparty.log
+      i: 127.0.0.1,::1
+      rproxy: -1
+      e2dsa
 
     [/music]
       ${S}/shared/audiofolders
@@ -399,14 +402,11 @@ in
           };
         };
 
-        networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall (
-          [
-            cfg.webPort
-            5556
-            5557
-          ]
-          ++ lib.optional cfg.copyparty.enable cfg.copyparty.port
-        );
+        networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall ([
+          cfg.webPort
+          5556
+          5557
+        ]);
 
         security.sudo.extraRules = [
           {
