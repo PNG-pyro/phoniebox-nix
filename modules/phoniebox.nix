@@ -90,24 +90,23 @@ let
         default = "Speakers";
       };
       volumeLimit = lib.mkOption {
-        type = lib.types.ints.between 0 100;
-        default = 100;
-        description = "Hard ceiling: the 0-100% range is scaled into 0..this. Not changeable from the web app.";
-      };
-      softMaxVolume = lib.mkOption {
-        type = lib.types.ints.between 0 100;
-        default = 100;
-        description = "Soft cap that can be changed temporarily from the web app.";
+        type = lib.types.nullOr (lib.types.ints.between 0 100);
+        default = null;
+        description = ''
+          Hard ceiling for this output: the 0-100% range is scaled into 0..this.
+          Not changeable from the web app. null leaves it to Phoniebox (100).
+        '';
       };
     };
   };
 
-  toOutput = o: {
-    inherit (o) alias;
-    volume_limit = o.volumeLimit;
-    soft_max_volume = o.softMaxVolume;
-    pulse_sink_name = o.sink;
-  };
+  toOutput =
+    o:
+    lib.filterAttrs (_: v: v != null) {
+      inherit (o) alias;
+      volume_limit = o.volumeLimit;
+      pulse_sink_name = o.sink;
+    };
 
   displayPkg = pkgs.callPackage ../pkgs/phoniebox-display { };
   i2cDevice = "dev-i2c\\x2d${toString cfg.display.bus}.device";
@@ -370,6 +369,8 @@ in
           # Uses 'sudo iwconfig', which isn't available here; WiFi power saving is
           # better set per host (e.g. networking.networkmanager.wifi.powersave).
           host.wlan_power.disable_power_down = lib.mkDefault false;
+
+          pulse.startup_volume = lib.mkDefault cfg.audio.startupVolume; # null = keep the last volume
         };
 
         # /var/lib isn't writable by users, so create the top folder as root
@@ -530,10 +531,6 @@ in
             config_file = "../../shared/settings/evdev.yaml";
           };
         };
-      })
-
-      (lib.mkIf (cfg.audio.startupVolume != null) {
-        services.phoniebox.settings.pulse.startup_volume = cfg.audio.startupVolume;
       })
 
       (lib.mkIf (cfg.audio.primary != null) {
