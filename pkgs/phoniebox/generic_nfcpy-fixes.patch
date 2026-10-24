@@ -819,19 +819,60 @@ index ab894f2..1bb7972 100644
        </Grid>
      </Grid>
 diff --git a/src/webapp/src/components/Library/lists/albums/album-list/album-list-item.js b/src/webapp/src/components/Library/lists/albums/album-list/album-list-item.js
-index 71f6ba3..c7d5999 100644
+index 71f6ba3..a805865 100644
 --- a/src/webapp/src/components/Library/lists/albums/album-list/album-list-item.js
 +++ b/src/webapp/src/components/Library/lists/albums/album-list/album-list-item.js
-@@ -18,6 +18,8 @@ import noCover from '../../../../../assets/noCover.jpg';
+@@ -7,21 +7,48 @@ import { useTranslation } from 'react-i18next';
+ 
+ import {
+   Avatar,
++  IconButton,
+   ListItem,
+   ListItemAvatar,
+   ListItemButton,
+   ListItemText,
+ } from '@mui/material';
++import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
++import PlayArrowIcon from '@mui/icons-material/PlayArrow';
++import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+ 
+ import noCover from '../../../../../assets/noCover.jpg';
+ 
  import AppSettingsContext from '../../../../../context/appsettings/context';
  import request from '../../../../../utils/request';
- 
 +import useInView from '../../../../../utils/use-in-view';
-+
- const AlbumListItem = ({ albumartist, album, isButton = true }) => {
++import AddToPlaylistDialog from '../../../add-to-playlist-dialog';
+ 
+-const AlbumListItem = ({ albumartist, album, isButton = true }) => {
++// Link into an album. Defined outside the item so it isn't re-created on every redraw.
++const AlbumLink = forwardRef((props, ref) => {
    const { t } = useTranslation();
    const { search: urlSearch } = useLocation();
-@@ -31,23 +33,27 @@ const AlbumListItem = ({ albumartist, album, isButton = true }) => {
++  const { data, ...rest } = props;
++
++  const artist = encodeURIComponent(data?.albumartist || t('library.albums.unknown-artist'));
++  const album = encodeURIComponent(data?.album || t('library.albums.unknown-album'));
++
++  // TODO: Introduce fallback incase artist or album are undefined
++  const location = `${artist}/${album}${urlSearch}`;
++
++  return <Link ref={ref} to={location} {...rest} />
++});
++
++const AlbumListItem = ({
++  albumartist,
++  album,
++  isButton = true,
++  isSelecting,
++  registerMusicToCard,
++}) => {
++  const { t } = useTranslation();
+   const [coverImage, setCoverImage] = useState(noCover);
++  const [dialogOpen, setDialogOpen] = useState(false);
+ 
+   const {
+     settings,
+@@ -31,56 +58,86 @@ const AlbumListItem = ({ albumartist, album, isButton = true }) => {
      show_covers,
    } = settings;
  
@@ -864,21 +905,121 @@ index 71f6ba3..c7d5999 100644
        getCoverArt();
      }
 -  }, [albumartist, album]);
+-
+-  const AlbumLink = forwardRef((props, ref) => {
+-    const { data } = props;
 +  }, [albumartist, album, show_covers, inView]);
  
-   const AlbumLink = forwardRef((props, ref) => {
-     const { data } = props;
-@@ -71,7 +77,7 @@ const AlbumListItem = ({ albumartist, album, isButton = true }) => {
-     >
-       <ListItemButton>
-         {show_covers &&
+-    const artist = encodeURIComponent(data?.albumartist || t('library.albums.unknown-artist'));
+-    const album = encodeURIComponent(data?.album || t('library.albums.unknown-album'));
++  const albumArgs = { albumartist, album };
+ 
+-    // TODO: Introduce fallback incase artist or album are undefined
+-    const location = `${artist}/${album}${urlSearch}`;
+-
+-    return <Link ref={ref} to={location} {...props} />
+-  });
++  // Buttons only in the album list, not where an album is shown as a heading
++  const buttons = isButton && (
++    <>
++      {!isSelecting &&
++        <IconButton aria-label="Add to playlist" onClick={() => setDialogOpen(true)}>
++          <PlaylistAddIcon />
++        </IconButton>
++      }
++      {isSelecting
++        ? <IconButton
++            edge="end"
++            aria-label="Assign to card"
++            onClick={() => registerMusicToCard('play_album', albumArgs)}
++          >
++            <CheckCircleOutlineIcon />
++          </IconButton>
++        : <IconButton
++            edge="end"
++            aria-label="Play"
++            onClick={() => request('play_album', albumArgs)}
++          >
++            <PlayArrowIcon />
++          </IconButton>
++      }
++    </>
++  );
+ 
+   return (
+-    <ListItem
+-      button={isButton}
+-      component={isButton ? AlbumLink : null}
+-      data={{ albumartist, album }}
+-      disablePadding
+-      key={album}
+-    >
+-      <ListItemButton>
+-        {show_covers &&
 -          <ListItemAvatar>
-+          <ListItemAvatar ref={coverRef}>
-             <Avatar variant="rounded" alt="Cover" src={coverImage} />
-           </ListItemAvatar>
-         }
+-            <Avatar variant="rounded" alt="Cover" src={coverImage} />
+-          </ListItemAvatar>
+-        }
+-        <ListItemText
+-          primary={album || t('library.albums.unknown-album')}
+-          secondary={albumartist || null}
++    <>
++      <ListItem
++        disablePadding
++        secondaryAction={buttons || undefined}
++        sx={buttons && !isSelecting ? { '& .MuiListItemButton-root': { pr: 12 } } : undefined}
++      >
++        <ListItemButton
++          {...(isButton ? { component: AlbumLink, data: albumArgs } : {})}
++        >
++          {show_covers &&
++            <ListItemAvatar ref={coverRef}>
++              <Avatar variant="rounded" alt="Cover" src={coverImage} />
++            </ListItemAvatar>
++          }
++          <ListItemText
++            primary={album || t('library.albums.unknown-album')}
++            secondary={albumartist || null}
++          />
++        </ListItemButton>
++      </ListItem>
++      {isButton &&
++        <AddToPlaylistDialog
++          open={dialogOpen}
++          onClose={() => setDialogOpen(false)}
++          item={albumArgs}
+         />
+-      </ListItemButton>
+-    </ListItem>
++      }
++    </>
+   );
+ }
+ 
+diff --git a/src/webapp/src/components/Library/lists/albums/album-list/index.js b/src/webapp/src/components/Library/lists/albums/album-list/index.js
+index 6d2d83e..3e69e2a 100644
+--- a/src/webapp/src/components/Library/lists/albums/album-list/index.js
++++ b/src/webapp/src/components/Library/lists/albums/album-list/index.js
+@@ -8,7 +8,7 @@ import {
+ 
+ import AlbumListItem from './album-list-item';
+ 
+-const AlbumList = ({ albums, musicFilter }) => {
++const AlbumList = ({ albums, musicFilter, isSelecting, registerMusicToCard }) => {
+   const { t } = useTranslation();
+ 
+   if (albums?.length) {
+@@ -19,6 +19,8 @@ const AlbumList = ({ albums, musicFilter }) => {
+             key={i}
+             albumartist={albumartist}
+             album={album}
++            isSelecting={isSelecting}
++            registerMusicToCard={registerMusicToCard}
+           />
+         ))}
+       </List>
 diff --git a/src/webapp/src/components/Library/lists/albums/index.js b/src/webapp/src/components/Library/lists/albums/index.js
-index 3e915a9..5d6c343 100644
+index 3e915a9..ba1417d 100644
 --- a/src/webapp/src/components/Library/lists/albums/index.js
 +++ b/src/webapp/src/components/Library/lists/albums/index.js
 @@ -1,5 +1,6 @@
@@ -888,7 +1029,15 @@ index 3e915a9..5d6c343 100644
  
  import {
    CircularProgress,
-@@ -18,6 +19,8 @@ const Albums = ({ musicFilter }) => {
+@@ -11,13 +12,15 @@ import { flatByAlbum } from '../../../../utils/utils';
+ 
+ import AlbumList from "./album-list";
+ 
+-const Albums = ({ musicFilter }) => {
++const Albums = ({ musicFilter, isSelecting, registerMusicToCard }) => {
+   const { t } = useTranslation();
+ 
+   const [albums, setAlbums] = useState([]);
    const [error, setError] = useState(null);
    const [isLoading, setIsLoading] = useState(true);
  
@@ -897,7 +1046,7 @@ index 3e915a9..5d6c343 100644
    const search = ({ albumartist, album }) => {
      if (musicFilter === '') return true;
  
-@@ -42,6 +45,7 @@ const Albums = ({ musicFilter }) => {
+@@ -42,11 +45,14 @@ const Albums = ({ musicFilter }) => {
  
    return (
      <>
@@ -905,6 +1054,13 @@ index 3e915a9..5d6c343 100644
        {isLoading
          ? <CircularProgress />
          : <AlbumList
+             albums={albums.filter(search)}
+             musicFilter={musicFilter}
++            isSelecting={isSelecting}
++            registerMusicToCard={registerMusicToCard}
+       />}
+       {error &&
+         <Typography>{t('library.loading-error')}</Typography>
 diff --git a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js b/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
 index b239181..aa41d48 100644
 --- a/src/webapp/src/components/Library/lists/albums/song-list/song-list-controls.js
@@ -1403,7 +1559,7 @@ index fa05325..8075a15 100644
  };
  
 diff --git a/src/webapp/src/components/Library/lists/index.js b/src/webapp/src/components/Library/lists/index.js
-index e2b7a2d..f63cf3b 100644
+index e2b7a2d..5060b5e 100644
 --- a/src/webapp/src/components/Library/lists/index.js
 +++ b/src/webapp/src/components/Library/lists/index.js
 @@ -9,6 +9,7 @@ import {
@@ -1445,7 +1601,21 @@ index e2b7a2d..f63cf3b 100644
          <Grid
            container
            spacing={1}
-@@ -90,6 +103,21 @@ const LibraryLists = () => {
+@@ -63,7 +76,12 @@ const LibraryLists = () => {
+           <Routes>
+             <Route
+               path="albums"
+-              element={<Albums musicFilter={musicFilter} />}
++              element={
++                <Albums
++                  musicFilter={musicFilter}
++                  isSelecting={isSelecting}
++                  registerMusicToCard={registerMusicToCard}
++              />}
+               exact
+             />
+             <Route
+@@ -90,6 +108,21 @@ const LibraryLists = () => {
                  />
                }
              />
