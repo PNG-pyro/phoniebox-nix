@@ -315,6 +315,18 @@ in
           ++ lib.optional cfg.copyparty.enable cfg.copyparty.port
         );
 
+        security.sudo.extraRules = [
+          {
+            users = [ cfg.user ];
+            commands = [
+              {
+                command = "${config.systemd.package}/bin/shutdown";
+                options = [ "NOPASSWD" ];
+              }
+            ];
+          }
+        ];
+
         systemd.user.services.phoniebox-mpd = {
           description = "MPD for Phoniebox";
           wantedBy = [ "default.target" ];
@@ -342,6 +354,8 @@ in
           path = [
             pkgs.coreutils
             pkgs.yq-go
+            config.systemd.package
+            "/run/wrappers"
           ];
 
           preStart = ''
