@@ -18,6 +18,7 @@ let
     bind_to_address    "localhost"
     port               "6600"
     auto_update        "yes"
+    ${lib.optionalString cfg.audio.normalize ''volume_normalization "yes"''}
 
     audio_output {
       type "pulse"
@@ -162,6 +163,14 @@ in
       secondary = lib.mkOption {
         type = lib.types.nullOr outputType;
         default = null;
+      };
+      normalize = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Even out loudness between songs (MPD's volume_normalization).
+          Adjusts volume while playing; can make quiet intros swell.
+        '';
       };
     };
 
