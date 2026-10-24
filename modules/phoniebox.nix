@@ -116,11 +116,11 @@ in
         "dialout"
         "input"
       ];
+    };
 
-      services.phoniebox.settings = {
-        webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
-        playermpd.mpd_conf = lib.mkDefault "${S}/mpd.conf";
-      };
+    services.phoniebox.settings = {
+      webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
+      playermpd.mpd_conf = lib.mkDefault "${S}/mpd.conf";
     };
 
     # /var/lib isn't writable by users, so create the top folder as root
