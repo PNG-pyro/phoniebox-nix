@@ -1291,6 +1291,86 @@ index 3727b94..0dfbe58 100644
      </BottomNavigation>
    );
  }
+diff --git a/src/webapp/src/components/Settings/dialogs/reboot.js b/src/webapp/src/components/Settings/dialogs/reboot.js
+index 1813f3c..a7fa9a0 100644
+--- a/src/webapp/src/components/Settings/dialogs/reboot.js
++++ b/src/webapp/src/components/Settings/dialogs/reboot.js
+@@ -23,19 +23,21 @@ export default function RebootDialog() {
+   const [showError, setShowError] = useState(false);
+ 
+   const checkIfBackendIsAvailable = () => {
++    let sawItGoDown = false;
+     const checkingInterval = setInterval(async () => {
+-      try {
+-        await request('playerstatus');
++      const { error } = await request('playerstatus');
++      if (error) {
++        sawItGoDown = true;
++        console.log('waiting for reboot');
++        return;
++      }
++      if (sawItGoDown) {
+         setDialogOpen(false);
+         setWaitingForReboot(false);
+         clearInterval(checkingInterval);
+       }
+-      catch(error) {
+-        setWaitingForReboot(true);
+-        console.log('waiting for reboot');
+-      }
+-    }, 15000);
+-  }
++    }, 5000);
++  };
+ 
+   const handleClickOpen = () => {
+     setDialogOpen(true);
+@@ -98,6 +100,7 @@ export default function RebootDialog() {
+           }
+ 
+         </DialogContent>
++     {!waitingForReboot &&
+         <DialogActions>
+           <Button onClick={handleCancelReboot} color="secondary">
+             {t('general.buttons.cancel')}
+@@ -106,6 +109,7 @@ export default function RebootDialog() {
+             {t('settings.dialogs.reboot.button-title')}
+           </Button>
+         </DialogActions>
++      }
+       </Dialog>
+ 
+       <Snackbar
+diff --git a/src/webapp/src/components/Settings/dialogs/shutdown.js b/src/webapp/src/components/Settings/dialogs/shutdown.js
+index 84a923d..e8feb65 100644
+--- a/src/webapp/src/components/Settings/dialogs/shutdown.js
++++ b/src/webapp/src/components/Settings/dialogs/shutdown.js
+@@ -75,10 +75,10 @@ export default function ShutDownDialog() {
+             </DialogContentText>
+           }
+         </DialogContent>
++     {!shuttingDown &&
+         <DialogActions>
+           <Button
+             color="secondary"
+-            disabled={shuttingDown}
+             onClick={handleCancelShutdown}
+           >
+             {t('general.buttons.cancel')}
+@@ -86,12 +86,12 @@ export default function ShutDownDialog() {
+           <Button
+             autoFocus
+             color="primary"
+-            disabled={shuttingDown}
+             onClick={doShutdown}
+           >
+             {t('settings.dialogs.shutdown.button-title')}
+           </Button>
+         </DialogActions>
++      }
+       </Dialog>
+ 
+       <Snackbar
 diff --git a/src/webapp/src/components/Settings/index.js b/src/webapp/src/components/Settings/index.js
 index 75ce784..65be0cd 100644
 --- a/src/webapp/src/components/Settings/index.js
