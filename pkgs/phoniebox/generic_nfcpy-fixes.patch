@@ -1,0 +1,56 @@
+diff --git a/src/jukebox/components/rfid/hardware/generic_nfcpy/generic_nfcpy.py b/src/jukebox/components/rfid/hardware/generic_nfcpy/generic_nfcpy.py
+index 4b6ac00..20b7c57 100644
+--- a/src/jukebox/components/rfid/hardware/generic_nfcpy/generic_nfcpy.py
++++ b/src/jukebox/components/rfid/hardware/generic_nfcpy/generic_nfcpy.py
+@@ -1,6 +1,6 @@
+ # Standard imports from python packages
+ import logging
+-
++import time
+ import nfc
+ import glob
+ from nfc.clf import RemoteTarget
+@@ -42,10 +42,15 @@ def query_customization() -> dict:
+     matching_files += glob.glob("/dev/ttyAMA[0-9]*")
+     for file_path in matching_files:
+         for driver in nfc.clf.device.tty_driver_list:
+-            device_id = f'{file_path}:{driver}'
+-            if clf.open(device_id):
++            device_id = f'tty:{file_path.removeprefix("/dev/tty")}:{driver}'
++            try:
++                opened = clf.open(device_id)
++            except OSError:
++                continue  # not this driver's hardware; try the next one
++            if opened:
+                 devices.append({'id': device_id, 'vendor': clf.device.vendor_name, 'name': clf.device.product_name})
+                 clf.close()
++                break  # found the right driver for this port
+ 
+     print("\nChoose RFID device from USB device list:\n")
+     logger.debug(f"USB devices: {[x['name'] for x in devices]}")
+@@ -83,8 +88,23 @@ class ReaderClass(ReaderBaseClass):
+                 raise KeyError("configuration may not be empty!!")
+ 
+         device_path = config.setdefault('device_path', None)
+-        self.clf = nfc.ContactlessFrontend()
+-        self.clf.open(device_path)
++
++        #self.clf = nfc.ContactlessFrontend()
++        #self.clf.open(device_path)
++
++        last_error = None
++        for attempt in range(1, 6):
++            self.clf = nfc.ContactlessFrontend()
++            try:
++                if self.clf.open(device_path):
++                    break
++                last_error = f"open() returned False for {device_path}"
++            except OSError as e:  # TimeoutError is a subclass of OSError
++                last_error = e
++            self._logger.warning(f"Could not open NFC reader (attempt {attempt}/5): {last_error}")
++            time.sleep(2)
++        else:
++            raise IOError(f"Could not open NFC reader at {device_path}: {last_error}")
+ 
+         self._keep_running = True
+ 
