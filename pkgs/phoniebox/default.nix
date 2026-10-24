@@ -9,6 +9,10 @@
 }:
 
 let
+
+  rev = "4fa84fd50750fd4b52984d51aa7c95466cf5b241"; # your existing pin
+  upstreamVersion = "3.6.0";
+
   zeromqDrafts = zeromq.override { enableDrafts = true; };
 
   readerDeps = p: {
