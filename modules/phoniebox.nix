@@ -344,6 +344,11 @@ in
 
         };
 
+        services.pipewire = {
+          enable = lib.mkDefault true;
+          pulse.enable = lib.mkDefault true;
+        };
+
         services.caddy = {
           enable = true;
           virtualHosts.":${toString cfg.webPort}".extraConfig = ''
