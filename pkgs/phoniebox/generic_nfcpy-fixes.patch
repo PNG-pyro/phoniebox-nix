@@ -964,7 +964,7 @@ index 0f22d2d..d8ae790 100644
  }
  
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
-index 3be77fb..a583e30 100644
+index 3be77fb..f07a6c5 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 @@ -1,4 +1,4 @@
@@ -1102,10 +1102,10 @@ index 3be77fb..a583e30 100644
 +      <ListItem
 +        disablePadding
 +        secondaryAction={isEditable ? editButtons : otherButtons}
++        sx={paddingRight ? { '& .MuiListItemButton-root': { pr: paddingRight } } : undefined}
 +      >
 +        <ListItemButton
 +          onClick={() => (isSelecting ? registerItemToCard() : playItem())}
-+          sx={paddingRight ? { pr: paddingRight } : undefined}
 +        >
 +          <FolderTypeAvatar type={type} />
 +          <ListItemText primary={name} />
@@ -1412,6 +1412,43 @@ index 9ecf88d..ae38e2f 100644
                />
              </RadioGroup>
            </Grid>
+diff --git a/src/webapp/src/components/Settings/timers/timer.js b/src/webapp/src/components/Settings/timers/timer.js
+index 28625f8..3a528e8 100644
+--- a/src/webapp/src/components/Settings/timers/timer.js
++++ b/src/webapp/src/components/Settings/timers/timer.js
+@@ -114,11 +114,14 @@ const TimerActions = ({ enabled, running, status, error, isLoading, type, onSetT
+ const Timer = ({ type }) => {
+   const { t } = useTranslation();
+   const timer = useTimer(type);
+-
+   return (
+-    <ListItem
+-      disableGutters
+-      secondaryAction={
++    <ListItem disableGutters sx={{ gap: 1 }}>
++      <ListItemText
++        sx={{ flex: '1 1 auto', minWidth: 0 }}
++        primary={t(`settings.timers.${type}.title`)}
++        secondary={t(`settings.timers.${type}.label`)}
++      />
++      <Box sx={{ flexShrink: 0 }}>
+         <TimerActions
+           {...timer}
+           onSetTimer={timer.setTimer}
+@@ -126,12 +129,7 @@ const Timer = ({ type }) => {
+           onSetWaitSeconds={timer.setWaitSeconds}
+           type={type}
+         />
+-      }
+-    >
+-      <ListItemText
+-        primary={t(`settings.timers.${type}.title`)}
+-        secondary={t(`settings.timers.${type}.label`)}
+-      />
++      </Box>
+     </ListItem>
+   );
+ };
 diff --git a/src/webapp/src/components/Settings/wifi.js b/src/webapp/src/components/Settings/wifi.js
 new file mode 100644
 index 0000000..5b28da1
