@@ -10,7 +10,7 @@ buildPythonPackage rec {
     format = "wheel";
     dist = "py3";
     python = "py3";
-    hash = ""; # first build prints the real one
+    hash = "sha256-wuEUl4dc4QEfnvMO2Ug4pKVqR1GgVOJ1eLkYBFSkQL8="; # first build prints the real one
   };
 
   doCheck = false; # no tests in the wheel
