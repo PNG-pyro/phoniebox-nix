@@ -25,12 +25,8 @@ let
     }
   '';
 
-  # upstream defaults, with our two path fixes applied
-  jukeboxDefault = pkgs.runCommand "jukebox.yaml" { } ''
-    sed -e 's|../../src/webapp/build/cover-cache|../../shared/cover-cache|' \
-        -e 's|~/.config/mpd/mpd.conf|${S}/mpd.conf|' \
-        ${share}/resources/default-settings/jukebox.default.yaml > $out
-  '';
+  settingsFormat = pkgs.formats.yaml { };
+  settingsFile = settingsFormat.generate "jukebox-overrides.yaml" cfg.settings;
 
   rfidYaml = (pkgs.formats.yaml { }).generate "rfid.yaml" {
     rfid.readers.read_00 = {
@@ -60,24 +56,30 @@ let
 in
 {
   options.services.phoniebox = {
+
     enable = lib.mkEnableOption "Phoniebox RFID jukebox";
     user = lib.mkOption { type = lib.types.str; };
+
     stateDir = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/phoniebox";
     };
+
     readerDevice = lib.mkOption {
       type = lib.types.str;
       default = "tty:USB0:pn532";
     };
+
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
     };
+
     webPort = lib.mkOption {
       type = lib.types.port;
       default = 80;
     };
+
     copyparty = {
       enable = lib.mkEnableOption "copyparty web upload for the music folder";
       port = lib.mkOption {
@@ -89,19 +91,36 @@ in
         description = "copyparty config file with an [accounts] section. Keep it out of the Nix store.";
       };
     };
+
     package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.callPackage ../pkgs/phoniebox { };
     };
+
+    settings = lib.mkOption {
+      type = settingsFormat.type;
+      default = { };
+      description = ''
+        Keys of jukebox.yaml managed by this module. They are deep-merged into
+        the live file on every start; everything else stays as the daemon and
+        the web app left it.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
+
     users.users.${cfg.user} = {
       linger = true;
       extraGroups = [
         "dialout"
         "input"
       ];
+
+      services.phoniebox.settings = {
+        webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
+        playermpd.mpd_conf = lib.mkDefault "${S}/mpd.conf";
+      };
     };
 
     # /var/lib isn't writable by users, so create the top folder as root
@@ -151,7 +170,10 @@ in
       ];
       unitConfig.ConditionUser = cfg.user;
       environment.PHONIEBOX_STATE = S;
-      path = [ pkgs.coreutils ];
+      path = [
+        pkgs.coreutils
+        pkgs.yq-go
+      ];
 
       preStart = ''
         mkdir -p ${S}/src/jukebox ${S}/mpd ${S}/shared/{settings,audiofolders,playlists,cover-cache,logs}
@@ -163,8 +185,13 @@ in
         # declarative: always overwritten
         install -m 644 ${rfidYaml} ${S}/shared/settings/rfid.yaml
 
-        # seeded once, then owned by the daemon
-        [ -e ${S}/shared/settings/jukebox.yaml ] || install -m 644 ${jukeboxDefault} ${S}/shared/settings/jukebox.yaml
+        J=${S}/shared/settings/jukebox.yaml
+
+        # first start: upstream defaults, untouched
+        [ -e "$J" ] || install -m 644 ${share}/resources/default-settings/jukebox.default.yaml "$J"
+
+        # every start: module-managed keys win
+        yq -i '. *= load("${settingsFile}")' "$J"
       '';
 
       serviceConfig = {
