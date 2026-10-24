@@ -186,7 +186,7 @@ index a26152e..9eba8d0 100644
 +def get_wifi_connect_state():
 +    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..760dd85 100644
+index 86dbc60..d4d115b 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
 @@ -152,10 +152,13 @@ class PlayerMPD:
@@ -194,7 +194,7 @@ index 86dbc60..760dd85 100644
                                           'rewind': self.rewind,
                                           'replay': self.replay,
 -                                         'replay_if_stopped': self.replay_if_stopped}
-+                                         'replay_if_stopped': self.replay_if_stopped
++                                         'replay_if_stopped': self.replay_if_stopped,
 +                                         'ignore': lambda: None,}
          self.second_swipe_action = None
          self.decode_2nd_swipe_option()
