@@ -20,6 +20,6 @@
       overlays.default = final: prev: {
         phoniebox = final.callPackage ./pkgs/phoniebox { };
       };
-      nixosModules.default = import ./modules/phoniebox.nix;
+      nixosModules.default = ./modules/phoniebox.nix;
     };
 }

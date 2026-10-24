@@ -126,6 +126,7 @@ in
       };
       accountsFile = lib.mkOption {
         type = lib.types.str;
+        default = "${cfg.stateDir}/copyparty-accounts.conf";
         description = "copyparty config file with an [accounts] section. Keep it out of the Nix store.";
       };
     };
@@ -332,11 +333,6 @@ in
               file_server
             }
           '';
-        };
-
-        services.phoniebox.copyparty = {
-          enable = true;
-          accountsFile = "/var/lib/phoniebox/copyparty-accounts.conf";
         };
 
       }
