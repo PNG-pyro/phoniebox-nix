@@ -356,6 +356,7 @@ in
             pkgs.yq-go
             config.systemd.package
             "/run/wrappers"
+            pkgs.hostname-debian
           ];
 
           preStart = ''
