@@ -60,6 +60,7 @@ let
       no-thumb
       q
       rp-loc: /upload
+      lo: ${cfg.stateDir}/copyparty.log
 
     [/music]
       ${S}/shared/audiofolders
