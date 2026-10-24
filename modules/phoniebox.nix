@@ -139,7 +139,7 @@ let
     address=/#/${h.address}
     dhcp-range=${hotspotPrefix}.10,${hotspotPrefix}.50,1h
     dhcp-option=option:router,${h.address}
-    dhcp-option=114,"http://${h.address}/"
+    dhcp-option=114,"http://${h.address}/captive-portal/api"
     dhcp-authoritative
   '';
 
@@ -470,20 +470,33 @@ in
 
         services.caddy = {
           enable = true;
-          virtualHosts.":${toString cfg.webPort}".extraConfig = ''
-            handle_path /cover-cache/* {
-              root * ${S}/shared/cover-cache
-              file_server
-            }
-            handle_path /logs/* {
-              root * ${S}/shared/logs
-              file_server browse
-            }
-            handle {
-              root * ${pkg.webapp}
-              file_server
-            }
-          '';
+          virtualHosts.":${toString cfg.webPort}".extraConfig =
+            lib.optionalString h.enable ''
+              @captive {
+                remote_ip ${hotspotPrefix}.0/24
+                not host ${h.address}
+              }
+              redir @captive http://${h.address}/ 302
+
+              handle /captive-portal/api {
+                header Content-Type application/captive+json
+                respond `{"captive": true, "user-portal-url": "http://${h.address}/"}` 200
+              }
+            ''
+            + ''
+              handle_path /cover-cache/* {
+                root * ${S}/shared/cover-cache
+                file_server
+              }
+              handle_path /logs/* {
+                root * ${S}/shared/logs
+                file_server browse
+              }
+              handle {
+                root * ${pkg.webapp}
+                file_server
+              }
+            '';
         };
 
       }
