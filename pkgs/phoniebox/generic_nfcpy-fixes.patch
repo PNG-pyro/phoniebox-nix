@@ -1077,22 +1077,25 @@ index 1f55415..7b55c92 100644
    return <Link ref={ref} to={location} {...props} />
  });
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
-index 3be77fb..f07a6c5 100644
+index 3be77fb..592d4fb 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
-@@ -1,4 +1,4 @@
+@@ -1,5 +1,4 @@
 -import React from 'react';
+-import { useTranslation } from 'react-i18next';
 +import React, { useState } from 'react';
- import { useTranslation } from 'react-i18next';
  
  import {
-@@ -8,9 +8,14 @@ import {
+   IconButton,
+@@ -8,9 +7,15 @@ import {
    ListItemText,
  } from '@mui/material';
  
+-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 +import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 +import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
- import NavigateNextIcon from '@mui/icons-material/NavigateNext';
++import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
++import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 +import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 +import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
  
@@ -1101,21 +1104,21 @@ index 3be77fb..f07a6c5 100644
  import FolderLink from './folder-link';
  import FolderTypeAvatar from './folder-type-avatar';
  
-@@ -18,9 +23,12 @@ const FolderListItem = ({
+@@ -18,9 +23,11 @@ const FolderListItem = ({
    folder,
    isSelecting,
    registerMusicToCard,
 +  playlistName,
 +  onPlaylistChanged,
  }) => {
-   const { t } = useTranslation();
+-  const { t } = useTranslation();
 -  const { type, name, relpath } = folder;
 +  const [dialogOpen, setDialogOpen] = useState(false);
 +  const { type, name, relpath, occurrence = 0, isFirst, isLast } = folder;
  
    const playItem = () => {
      switch(type) {
-@@ -42,27 +50,106 @@ const FolderListItem = ({
+@@ -42,27 +49,111 @@ const FolderListItem = ({
      }
    }
  
@@ -1128,10 +1131,10 @@ index 3be77fb..f07a6c5 100644
 +    }
 +  })();
 +
++  const isDirectory = type === 'directory';
 +  // A song inside a playlist gets edit buttons instead of "+"
 +  const isEditable = !isSelecting && playlistName && type === 'file';
 +  const showAdd = !isSelecting && !isEditable && playlistItem !== null;
-+  const isDirectory = type === 'directory';
 +
 +  const editPlaylist = async (command, extra = {}) => {
 +    const { error } = await request(command, {
@@ -1170,6 +1173,17 @@ index 3be77fb..f07a6c5 100644
 +    </>
 +  );
 +
++  // Folders: tapping the row opens them, so play / assign get a button of their own
++  const folderActionButton = isDirectory && (
++    isSelecting
++      ? <IconButton edge="end" aria-label="Assign to card" onClick={registerItemToCard}>
++          <CheckCircleOutlineIcon />
++        </IconButton>
++      : <IconButton edge="end" aria-label="Play" onClick={playItem}>
++          <PlayArrowIcon />
++        </IconButton>
++  );
++
 +  const otherButtons = (showAdd || isDirectory)
 +    ? <>
 +        {showAdd &&
@@ -1181,21 +1195,17 @@ index 3be77fb..f07a6c5 100644
 +            <PlaylistAddIcon />
 +          </IconButton>
 +        }
-+        {isDirectory &&
-+          <IconButton
-+            component={FolderLink}
-+            data={{ dir: relpath }}
-+            edge="end"
-+            aria-label={t('library.folders.show-folder-content')}
-+          >
-+            <NavigateNextIcon />
-+          </IconButton>
-+        }
++        {folderActionButton}
 +      </>
 +    : undefined;
 +
 +  // Room for the buttons on the right, so long names don't run under them
 +  const paddingRight = isEditable ? 18 : (showAdd && isDirectory ? 12 : undefined);
++
++  // Folders open on tap; songs play (or get assigned) on tap
++  const rowProps = isDirectory
++    ? { component: FolderLink, data: { dir: relpath } }
++    : { onClick: () => (isSelecting ? registerItemToCard() : playItem()) };
 +
    return (
 -    <ListItem
@@ -1217,9 +1227,7 @@ index 3be77fb..f07a6c5 100644
 +        secondaryAction={isEditable ? editButtons : otherButtons}
 +        sx={paddingRight ? { '& .MuiListItemButton-root': { pr: paddingRight } } : undefined}
 +      >
-+        <ListItemButton
-+          onClick={() => (isSelecting ? registerItemToCard() : playItem())}
-+        >
++        <ListItemButton {...rowProps}>
 +          <FolderTypeAvatar type={type} />
 +          <ListItemText primary={name} />
 +        </ListItemButton>
