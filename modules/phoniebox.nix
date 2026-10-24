@@ -438,6 +438,7 @@ in
             config.systemd.package
             "/run/wrappers"
             pkgs.hostname-debian
+            pkgs.networkmanager
           ];
 
           preStart = ''

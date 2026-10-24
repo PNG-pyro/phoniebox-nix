@@ -1,8 +1,18 @@
 diff --git a/src/jukebox/components/hostif/linux/__init__.py b/src/jukebox/components/hostif/linux/__init__.py
-index a26152e..a1a042a 100644
+index a26152e..9eba8d0 100644
 --- a/src/jukebox/components/hostif/linux/__init__.py
 +++ b/src/jukebox/components/hostif/linux/__init__.py
-@@ -240,52 +240,40 @@ def get_autohotspot_status():
+@@ -9,6 +9,9 @@ import jukebox.plugs as plugin
+ import jukebox.cfghandler
+ import jukebox.publishing
+ import jukebox.speaking_text
++import re
++import threading
++
+ from jukebox.multitimer import GenericEndlessTimerClass
+ 
+ logger = logging.getLogger('jb.host.lnx')
+@@ -240,52 +243,40 @@ def get_autohotspot_status():
  
      return status
  
@@ -78,6 +88,103 @@ index a26152e..a1a042a 100644
  
  # ---------------------------------------------------------------------------
  # RPi-only stuff
+@@ -397,3 +388,96 @@ def atexit(**ignored_kwargs):
+     global timer_temperature
+     timer_temperature.cancel()
+     return timer_temperature.timer_thread
++
++
++# ---------------------------------------------------------------------------
++# WiFi via NetworkManager (phoniebox-nix)
++# ---------------------------------------------------------------------------
++
++def _nmcli(*args, timeout=20):
++    return subprocess.run(['nmcli', *args], capture_output=True, text=True, timeout=timeout)
++
++
++def _split_terse(line):
++    """Split one line of `nmcli -t` output; colons inside values are escaped as \\:"""
++    fields = re.split(r'(?<!\\):', line)
++    return [f.replace('\\:', ':').replace('\\\\', '\\') for f in fields]
++
++
++@plugin.register
++def get_wifi_status():
++    """The currently connected WiFi network, or ssid None"""
++    try:
++        out = _nmcli('-t', '-f', 'ACTIVE,SSID,SIGNAL', 'device', 'wifi', 'list', '--rescan', 'no')
++    except Exception as e:
++        logger.error(f"nmcli failed: {e}")
++        return {'ssid': None, 'error': str(e)}
++    for line in out.stdout.splitlines():
++        active, ssid, signal = (_split_terse(line) + ['', '', ''])[:3]
++        if active == 'yes':
++            return {'ssid': ssid, 'signal': int(signal or 0)}
++    return {'ssid': None}
++
++
++@plugin.register
++def scan_wifi():
++    """Visible networks, one entry per name, strongest first"""
++    fields = ['-t', '-f', 'IN-USE,SSID,SIGNAL,SECURITY', 'device', 'wifi', 'list']
++    out = _nmcli(*fields, '--rescan', 'yes', timeout=30)
++    if out.returncode != 0:
++        # NetworkManager refuses back-to-back rescans; use its latest results instead
++        out = _nmcli(*fields, '--rescan', 'no')
++    networks = {}
++    for line in out.stdout.splitlines():
++        in_use, ssid, signal, security = (_split_terse(line) + [''] * 4)[:4]
++        if not ssid:
++            continue  # hidden network
++        entry = {'ssid': ssid, 'signal': int(signal or 0),
++                 'secure': security not in ('', '--'), 'active': in_use == '*'}
++        old = networks.get(ssid)
++        if old is None or entry['signal'] > old['signal']:
++            if old is not None:
++                entry['active'] = entry['active'] or old['active']
++            networks[ssid] = entry
++        elif entry['active']:
++            old['active'] = True
++    return sorted(networks.values(), key=lambda n: n['signal'], reverse=True)
++
++
++_wifi_connect_state = {'state': 'idle', 'ssid': None, 'message': ''}
++
++
++def _wifi_connect_worker(ssid, password):
++    known = [_split_terse(n)[0] for n in _nmcli('-t', '-f', 'NAME', 'connection', 'show').stdout.splitlines()]
++    args = ['-w', '45', 'device', 'wifi', 'connect', ssid]
++    if password:
++        args += ['password', password]
++    try:
++        result = _nmcli(*args, timeout=60)
++        ok, message = result.returncode == 0, result.stderr.strip()
++    except Exception as e:
++        ok, message = False, str(e)
++    if ok:
++        _wifi_connect_state.update(state='connected', message='')
++    else:
++        # Don't leave a broken profile behind (e.g. wrong password);
++        # NetworkManager falls back to the previous network by itself
++        if ssid not in known:
++            _nmcli('connection', 'delete', 'id', ssid)
++        _wifi_connect_state.update(state='failed', message=message)
++
++
++@plugin.register
++def connect_wifi(ssid: str, password: str = ''):
++    """Start connecting in the background; poll get_wifi_connect_state for the outcome"""
++    if _wifi_connect_state['state'] == 'connecting':
++        return 'busy'
++    _wifi_connect_state.update(state='connecting', ssid=ssid, message='')
++    threading.Thread(target=_wifi_connect_worker, args=(ssid, password),
++                     daemon=True, name='WifiConnect').start()
++    return 'started'
++
++
++@plugin.register
++def get_wifi_connect_state():
++    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
 index 86dbc60..ebd6b9b 100644
 --- a/src/jukebox/components/playermpd/__init__.py
