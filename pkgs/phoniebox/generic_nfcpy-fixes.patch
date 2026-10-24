@@ -1031,3 +1031,119 @@ index 46a6ec1..a47b125 100644
  
  const SUBSCRIPTIONS = [
    'batt_status',
+diff --git a/src/webapp/src/sockets/index.js b/src/webapp/src/sockets/index.js
+index fedc57a..a17f4ea 100644
+--- a/src/webapp/src/sockets/index.js
++++ b/src/webapp/src/sockets/index.js
+@@ -43,59 +43,65 @@ const initSockets = ({ setState, events }) => {
+   socketEvents({ setState, events });
+ };
+ 
+-const socketRequest = (_package, plugin, method, kwargs) => (
+-  new Promise((resolve, reject) => {
+-    const requestId = uuidv4();
+-
+-    socketRequest.server = new zmq.Req();
+-
+-    socketRequest.server.on('message', (msg) => {
+-      const { id, error, result } = decodeMessage(msg);
+-
+-      if (error && error.message) {
+-        return reject(error.message);
+-      }
++// One shared request connection, used for all requests, one at a time
++// (a ZeroMQ REQ socket must strictly alternate send and receive).
++// Replaces one-connection-per-request, which leaked a WebSocket per request
++// until the browser refused to open more.
++const REQUEST_TIMEOUT_MS = 15000;
++
++let reqSocket = null;
++let pending = null; // { requestId, resolve, reject, timer }
++let queue = Promise.resolve();
++
++const openReqSocket = () => {
++  const socket = new zmq.Req();
++  socket.on('message', (msg) => {
++    if (!pending) return;
++    const { requestId, resolve, reject, timer } = pending;
++    pending = null;
++    clearTimeout(timer);
++
++    const { id, error, result } = decodeMessage(msg);
++    if (error && error.message) return reject(error.message);
++    if (id && id === requestId) return resolve(result);
++    return reject('Received socket message ID does not match sender ID.');
++  });
++  socket.connect(REQRES_ENDPOINT);
++  return socket;
++};
+ 
+-      // This implementation of Req Sockets is not ideal for parallel
+-      // requests. In case 2 requests are launched at the same time
+-      // both connect to the socket. The first one to return would
+-      // close the channel which cancels the second request without
+-      // allowing to receive the data. Not closing the channel
+-      // here is not ideal, but it's not harmful either.
+-      // Ideally, we outsouce `socketRequest.server` similar to
+-      // `socket_sub`
+-      // socketRequest.server.close();
+-
+-      if (id && id === requestId) {
+-        return resolve(result);
+-      }
+-      else {
+-        return reject('Received socket message ID does not match sender ID.');
+-      }
+-    });
++const resetReqSocket = () => {
++  try {
++    if (reqSocket) reqSocket.close();
++  } catch (error) {
++    // already closed
++  }
++  reqSocket = null;
++};
+ 
+-    socketRequest.server.onerror = function (err) {
+-      reject(err);
+-    };
++const sendOne = (_package, plugin, method, kwargs) => (
++  new Promise((resolve, reject) => {
++    if (!reqSocket) reqSocket = openReqSocket();
++    const requestId = uuidv4();
+ 
+-    try {
+-      socketRequest.server.connect(REQRES_ENDPOINT);
+-    }
+-    catch (error) {
+-      console.error(`WebSocket connection to '${REQRES_ENDPOINT} failed: `, error);
+-    }
++    // If no answer comes, the connection can't send again, so start a fresh one
++    const timer = setTimeout(() => {
++      pending = null;
++      resetReqSocket();
++      reject(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
++    }, REQUEST_TIMEOUT_MS);
+ 
+-    const payload = preparePayload(
+-      requestId,
+-      _package,
+-      plugin,
+-      method,
+-      kwargs,
+-    );
+-    socketRequest.server.send(encodeMessage(payload));
++    pending = { requestId, resolve, reject, timer };
++    reqSocket.send(encodeMessage(preparePayload(requestId, _package, plugin, method, kwargs)));
+   })
+ );
+ 
++const socketRequest = (_package, plugin, method, kwargs) => {
++  const result = queue.then(() => sendOne(_package, plugin, method, kwargs));
++  queue = result.catch(() => {}); // a failed request mustn't stall the ones behind it
++  return result;
++};
++
+ export {
+   initSockets,
+   socketRequest,
