@@ -28,17 +28,41 @@ let
   settingsFormat = pkgs.formats.yaml { };
   settingsFile = settingsFormat.generate "jukebox-overrides.yaml" cfg.settings;
 
-  rfidYaml = (pkgs.formats.yaml { }).generate "rfid.yaml" {
-    rfid.readers.read_00 = {
-      module = "generic_nfcpy";
-      config.device_path = cfg.readerDevice;
-      same_id_delay = 1.0;
-      log_ignored_cards = false;
-      place_not_swipe = {
-        enabled = false;
-        card_removal_action.alias = "pause";
-      };
-    };
+  # rfidYaml = (pkgs.formats.yaml { }).generate "rfid.yaml" {
+  #   rfid.readers.read_00 = {
+  #     module = "generic_nfcpy";
+  #     config.device_path = cfg.readerDevice;
+  #     same_id_delay = 1.0;
+  #     log_ignored_cards = false;
+  #     place_not_swipe = {
+  #       enabled = false;
+  #       card_removal_action.alias = "pause";
+  #     };
+  #   };
+  # };
+
+  readerModules = lib.unique (lib.mapAttrsToList (_: r: r.module) cfg.readers);
+
+  rfidYaml = settingsFormat.generate "rfid.yaml" {
+    rfid.readers = lib.mapAttrs (
+      _: r:
+      {
+        same_id_delay = 1.0;
+        log_ignored_cards = false;
+        place_not_swipe = {
+          enabled = false;
+          card_removal_action.alias = "pause";
+        };
+      }
+      // removeAttrs r [
+        "module"
+        "settings"
+      ] # freeform keys override the defaults
+      // {
+        inherit (r) module;
+        config = r.settings;
+      }
+    ) cfg.readers;
   };
 
   copypartyConf = pkgs.writeText "copyparty.conf" ''
@@ -79,10 +103,10 @@ in
       default = "/var/lib/phoniebox";
     };
 
-    readerDevice = lib.mkOption {
-      type = lib.types.str;
-      default = "tty:USB0:pn532";
-    };
+    # readerDevice = lib.mkOption {
+    #   type = lib.types.str;
+    #   default = "tty:USB0:pn532";
+    # };
 
     openFirewall = lib.mkOption {
       type = lib.types.bool;
@@ -108,7 +132,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.callPackage ../pkgs/phoniebox { };
+      default = pkgs.callPackage ../pkgs/phoniebox { readers = readerModules; };
     };
 
     settings = lib.mkOption {
@@ -158,6 +182,35 @@ in
       );
     };
 
+    readers = lib.mkOption {
+      description = "RFID readers, written to rfid.yaml. Attribute names become reader IDs.";
+      default = {
+        read_00 = {
+          module = "generic_nfcpy";
+          settings.device_path = "tty:USB0:pn532";
+        };
+      };
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          freeformType = settingsFormat.type; # passes through same_id_delay etc.
+          options = {
+            module = lib.mkOption {
+              type = lib.types.enum [
+                "generic_nfcpy"
+                "generic_usb"
+                "rdm6300_serial"
+              ];
+            };
+            settings = lib.mkOption {
+              type = settingsFormat.type;
+              default = { };
+              description = "Reader-specific options (the 'config' block in rfid.yaml).";
+            };
+          };
+        }
+      );
+    };
+
   };
 
   config = lib.mkIf cfg.enable (
@@ -166,9 +219,11 @@ in
 
         users.users.${cfg.user} = {
           linger = true;
-          extraGroups = [
-            "dialout"
-          ];
+          extraGroups =
+            lib.optional (
+              lib.elem "generic_nfcpy" readerModules || lib.elem "rdm6300_serial" readerModules
+            ) "dialout"
+            ++ lib.optional (lib.elem "generic_usb" readerModules) "input";
         };
 
         services.phoniebox.settings = {

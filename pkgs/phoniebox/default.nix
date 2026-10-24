@@ -5,8 +5,25 @@
   makeWrapper,
   python3,
   zeromq,
+  readers ? [ "generic_nfcpy" ],
 }:
 let
+
+  readerDeps = p: {
+    generic_nfcpy = [ p.nfcpy ];
+    generic_usb = [ ];
+    rdm6300_serial = [ p.pyserial ];
+  };
+
+  py = python3.withPackages (
+    p:
+    [
+      # your pyzmq override and core packages, minus nfcpy
+    ]
+    ++ lib.concatMap (
+      r: (readerDeps p).${r} or (throw "phoniebox: no packaging for reader module '${r}' yet")
+    ) readers
+  );
 
   rev = "4fa84fd50750fd4b52984d51aa7c95466cf5b241"; # your existing pin
   upstreamVersion = "3.6.0";
@@ -30,7 +47,6 @@ let
       requests
       tornado
       paho-mqtt
-      nfcpy
     ]
   );
 in
