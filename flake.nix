@@ -16,6 +16,7 @@
       packages = forAll (pkgs: rec {
         phoniebox = pkgs.callPackage ./pkgs/phoniebox { };
         default = phoniebox;
+        webapp = pkgs.callPackage ./pkgs/phoniebox-webapp { inherit phoniebox; };
       });
       overlays.default = final: prev: {
         phoniebox = final.callPackage ./pkgs/phoniebox { };
