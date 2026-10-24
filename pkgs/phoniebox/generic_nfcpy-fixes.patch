@@ -1328,7 +1328,7 @@ index 1f55415..7b55c92 100644
    return <Link ref={ref} to={location} {...props} />
  });
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
-index 3be77fb..592d4fb 100644
+index 3be77fb..647eb08 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 @@ -1,5 +1,4 @@
@@ -1338,7 +1338,7 @@ index 3be77fb..592d4fb 100644
  
  import {
    IconButton,
-@@ -8,9 +7,15 @@ import {
+@@ -8,19 +7,33 @@ import {
    ListItemText,
  } from '@mui/material';
  
@@ -1355,7 +1355,13 @@ index 3be77fb..592d4fb 100644
  import FolderLink from './folder-link';
  import FolderTypeAvatar from './folder-type-avatar';
  
-@@ -18,9 +23,11 @@ const FolderListItem = ({
++import Avatar from '@mui/material/Avatar';
++import ListItemAvatar from '@mui/material/ListItemAvatar';
++import QueueMusicIcon from '@mui/icons-material/QueueMusic';
++
++import { getPlaylistName } from '../../../../utils/playlists';
++
+ const FolderListItem = ({
    folder,
    isSelecting,
    registerMusicToCard,
@@ -1369,7 +1375,7 @@ index 3be77fb..592d4fb 100644
  
    const playItem = () => {
      switch(type) {
-@@ -42,27 +49,111 @@ const FolderListItem = ({
+@@ -42,27 +55,117 @@ const FolderListItem = ({
      }
    }
  
@@ -1386,6 +1392,7 @@ index 3be77fb..592d4fb 100644
 +  // A song inside a playlist gets edit buttons instead of "+"
 +  const isEditable = !isSelecting && playlistName && type === 'file';
 +  const showAdd = !isSelecting && !isEditable && playlistItem !== null;
++  const isPlaylistFolder = isDirectory && getPlaylistName(relpath) !== null;
 +
 +  const editPlaylist = async (command, extra = {}) => {
 +    const { error } = await request(command, {
@@ -1479,7 +1486,12 @@ index 3be77fb..592d4fb 100644
 +        sx={paddingRight ? { '& .MuiListItemButton-root': { pr: paddingRight } } : undefined}
 +      >
 +        <ListItemButton {...rowProps}>
-+          <FolderTypeAvatar type={type} />
++          {isPlaylistFolder
++            ? <ListItemAvatar>
++                <Avatar><QueueMusicIcon /></Avatar>
++              </ListItemAvatar>
++            : <FolderTypeAvatar type={type} />
++          }
 +          <ListItemText primary={name} />
 +        </ListItemButton>
 +      </ListItem>
