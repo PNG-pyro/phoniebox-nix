@@ -186,10 +186,18 @@ index a26152e..9eba8d0 100644
 +def get_wifi_connect_state():
 +    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..6b2d4fd 100644
+index 86dbc60..b26899c 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
-@@ -152,10 +152,13 @@ class PlayerMPD:
+@@ -87,6 +87,7 @@ import threading
+ import logging
+ import time
+ import functools
++import shutil
+ from pathlib import Path
+ import components.player
+ import jukebox.cfghandler
+@@ -152,10 +153,13 @@ class PlayerMPD:
                                           'skip': self.next,
                                           'rewind': self.rewind,
                                           'replay': self.replay,
@@ -204,7 +212,7 @@ index 86dbc60..6b2d4fd 100644
          self.end_of_playlist_next_action = utils.get_config_action(cfg,
                                                                     'playermpd',
                                                                     'end_of_playlist_next_action',
-@@ -256,6 +259,209 @@ class PlayerMPD:
+@@ -256,6 +260,243 @@ class PlayerMPD:
                                                           custom_action['args'],
                                                           custom_action['kwargs'])
  
@@ -273,6 +281,16 @@ index 86dbc60..6b2d4fd 100644
 +        if song_url:
 +            return [song_url]
 +        if folder is not None:
++            folder_abs = os.path.join(self.music_library_path, folder)
++            m3us = sorted(f for f in os.listdir(folder_abs) if f.lower().endswith('.m3u')) \
++                if os.path.isdir(folder_abs) else []
++            if m3us:
++                # A playlist folder: its songs are the .m3u entries, in playlist order
++                with open(os.path.join(folder_abs, m3us[0]), encoding='utf-8') as f:
++                    _, blocks, _ = self._parse_playlist(f.read().splitlines())
++                return [os.path.relpath(os.path.normpath(os.path.join(folder_abs, entry)),
++                                        self.music_library_path)
++                        for _, entry in blocks]
 +            entries = self.mpd_retry_with_mutex(self.mpd_client.listall, folder)
 +            return sorted(e['file'] for e in entries if 'file' in e)
 +        if album is not None:
@@ -411,10 +429,34 @@ index 86dbc60..6b2d4fd 100644
 +            blocks[i], blocks[j] = blocks[j], blocks[i]
 +            self._save_playlist(playlist_file, header, blocks, trailing)
 +
++    @plugs.tag
++    def rename_playlist(self, name: str, new_name: str):
++        """Rename a playlist: its folder and the .m3u inside. Cards using it must be reassigned."""
++        old_dir = self._playlist_dir(name)
++        new_dir = self._playlist_dir(new_name)
++        name, new_name = name.strip(), new_name.strip()
++        if not os.path.isdir(old_dir):
++            raise FileNotFoundError(f"Playlist '{name}' doesn't exist")
++        if os.path.exists(new_dir):
++            raise FileExistsError(f"A playlist named '{new_name}' already exists")
++        os.rename(old_dir, new_dir)
++        old_m3u = os.path.join(new_dir, f'{name}.m3u')
++        if os.path.exists(old_m3u):
++            os.rename(old_m3u, os.path.join(new_dir, f'{new_name}.m3u'))
++        return new_name
++
++    @plugs.tag
++    def delete_playlist(self, name: str):
++        """Delete a playlist (its folder). Cards using it must be reassigned."""
++        playlist_dir = self._playlist_dir(name)
++        if not os.path.isdir(playlist_dir):
++            raise FileNotFoundError(f"Playlist '{name}' doesn't exist")
++        shutil.rmtree(playlist_dir)
++
      def mpd_retry_with_mutex(self, mpd_cmd, *args):
          """
          This method adds thread saftey for acceses to mpd via a mutex lock,
-@@ -562,7 +768,7 @@ class PlayerMPD:
+@@ -562,7 +803,7 @@ class PlayerMPD:
          logger.debug(f"last_played_folder = {self.music_player_status['player_status']['last_played_folder']}")
          with self.mpd_lock:
              is_second_swipe = self.music_player_status['player_status']['last_played_folder'] == folder
@@ -423,7 +465,7 @@ index 86dbc60..6b2d4fd 100644
              logger.debug('Calling second swipe action')
  
              # run callbacks before second_swipe_action is invoked
-@@ -577,6 +783,19 @@ class PlayerMPD:
+@@ -577,6 +818,19 @@ class PlayerMPD:
  
              self.play_folder(folder, recursive)
  
@@ -443,7 +485,7 @@ index 86dbc60..6b2d4fd 100644
      @plugs.tag
      def get_single_coverart(self, song_url):
          mp3_file_path = Path(components.player.get_music_library_path(), song_url).expanduser()
-@@ -609,7 +828,48 @@ class PlayerMPD:
+@@ -609,7 +863,50 @@ class PlayerMPD:
          """
          plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
          plc.get_directory_content(folder)
@@ -454,6 +496,8 @@ index 86dbc60..6b2d4fd 100644
 +        except Exception as e:
 +            # Never let the check break the listing itself
 +            logger.warning(f"Couldn't check which entries in '{folder}' are playable: {e}")
++            # Hide hidden files and folders (e.g. copyparty's .hist)
++            entries = [e for e in entries if not e.get('name', '').startswith('.')]
 +        return entries
 +
 +    def _mark_playable(self, folder, entries):
@@ -493,7 +537,7 @@ index 86dbc60..6b2d4fd 100644
  
      @plugs.tag
      def play_folder(self, folder: str, recursive: bool = False) -> None:
-@@ -629,17 +889,29 @@ class PlayerMPD:
+@@ -629,17 +926,29 @@ class PlayerMPD:
  
              plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
              plc.parse(folder, recursive)
@@ -526,7 +570,7 @@ index 86dbc60..6b2d4fd 100644
              self.current_folder_status = self.music_player_status['audio_folder_status'].get(folder)
              if self.current_folder_status is None:
                  self.current_folder_status = self.music_player_status['audio_folder_status'][folder] = {}
-@@ -662,6 +934,8 @@ class PlayerMPD:
+@@ -662,6 +971,8 @@ class PlayerMPD:
              self.mpd_client.clear()
              self.mpd_retry_with_mutex(self.mpd_client.findadd, 'albumartist', albumartist, 'album', album)
              self.mpd_client.play()
@@ -614,7 +658,7 @@ index 5a78207..ed2ac06 100644
          'package': 'player',
          'plugin': 'ctrl',
 diff --git a/src/webapp/src/commands/index.js b/src/webapp/src/commands/index.js
-index 1e98499..c287385 100644
+index 1e98499..585b531 100644
 --- a/src/webapp/src/commands/index.js
 +++ b/src/webapp/src/commands/index.js
 @@ -114,6 +114,17 @@ const commands = {
@@ -635,7 +679,7 @@ index 1e98499..c287385 100644
  
    // Volume
    setVolume: {
-@@ -269,6 +280,54 @@ const commands = {
+@@ -269,6 +280,66 @@ const commands = {
      plugin: 'say_my_ip',
      argKeys: ['option'],
    },
@@ -686,6 +730,18 @@ index 1e98499..c287385 100644
 +    plugin: 'ctrl',
 +    method: 'move_in_playlist',
 +    argKeys: ['name', 'song_url', 'direction', 'occurrence'],
++  },
++  renamePlaylist: {
++    _package: 'player',
++    plugin: 'ctrl',
++    method: 'rename_playlist',
++    argKeys: ['name', 'new_name'],
++  },
++  deletePlaylist: {
++    _package: 'player',
++    plugin: 'ctrl',
++    method: 'delete_playlist',
++    argKeys: ['name'],
 +  },
  
    // Misc
@@ -1625,10 +1681,18 @@ index 3222e42..8fbf099 100644
        )}
      </List>
 diff --git a/src/webapp/src/components/Library/lists/folders/index.js b/src/webapp/src/components/Library/lists/folders/index.js
-index fa05325..499a35a 100644
+index fa05325..8b66e33 100644
 --- a/src/webapp/src/components/Library/lists/folders/index.js
 +++ b/src/webapp/src/components/Library/lists/folders/index.js
-@@ -8,20 +8,25 @@ import {
+@@ -1,6 +1,7 @@
+ import React, { useEffect, useState } from "react";
+ import { useParams } from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
++import PlaylistBanner from './playlist-banner';
+ 
+ import {
+   CircularProgress,
+@@ -8,20 +9,25 @@ import {
  } from "@mui/material";
  
  import request from '../../../../utils/request';
@@ -1654,7 +1718,7 @@ index fa05325..499a35a 100644
  
    const search = ({ name }) => {
      if (musicFilter === '') return true;
-@@ -31,23 +36,45 @@ const Folders = ({
+@@ -31,23 +37,48 @@ const Folders = ({
      return name.toLowerCase().includes(lowerCaseMusicFilter);
    };
  
@@ -1710,10 +1774,13 @@ index fa05325..499a35a 100644
 +
 +  // Editing only inside a playlist, and not while searching
 +  const playlistName = musicFilter ? null : getPlaylistName(decodeURIComponent(dir));
++
++  const decodedDir = decodeURIComponent(dir).replace(/^\.\//, '');
++  const bannerName = getPlaylistName(decodedDir);
  
    if (isLoading) return <CircularProgress />;
    if (error) return <Typography>{t('library.loading-error')}</Typography>;
-@@ -56,12 +83,18 @@ const Folders = ({
+@@ -56,12 +87,27 @@ const Folders = ({
    }
  
    return (
@@ -1725,6 +1792,15 @@ index fa05325..499a35a 100644
 -    />
 +    <>
 +      <div ref={scrollRef} />
++      {bannerName &&
++        <PlaylistBanner
++          name={bannerName}
++          folder={decodedDir}
++          songCount={fileCount}
++          isSelecting={isSelecting}
++          registerMusicToCard={registerMusicToCard}
++        />
++      }
 +      <FolderList
 +        dir={dir}
 +        topDir={topDir}
@@ -1738,6 +1814,190 @@ index fa05325..499a35a 100644
    );
  };
  
+diff --git a/src/webapp/src/components/Library/lists/folders/playlist-banner.js b/src/webapp/src/components/Library/lists/folders/playlist-banner.js
+new file mode 100644
+index 0000000..7f3e78c
+--- /dev/null
++++ b/src/webapp/src/components/Library/lists/folders/playlist-banner.js
+@@ -0,0 +1,178 @@
++import React, { useState } from 'react';
++import { useLocation, useNavigate } from 'react-router-dom';
++import { useTranslation } from 'react-i18next';
++
++import {
++  Button,
++  Dialog,
++  DialogActions,
++  DialogContent,
++  DialogContentText,
++  DialogTitle,
++  Grid,
++  IconButton,
++  TextField,
++  Typography,
++} from '@mui/material';
++import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
++import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
++import PlayCircleFilledRoundedIcon from '@mui/icons-material/PlayCircleFilledRounded';
++import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
++
++import request from '../../../../utils/request';
++import AddToPlaylistDialog from '../../add-to-playlist-dialog';
++
++const CARDS_NOTE = 'Cards using this playlist will need to be reassigned afterwards.';
++
++const PlaylistBanner = ({ name, folder, songCount, isSelecting, registerMusicToCard }) => {
++  const { t } = useTranslation();
++  const navigate = useNavigate();
++  const { search: urlSearch } = useLocation();
++
++  const [addOpen, setAddOpen] = useState(false);
++  const [renameOpen, setRenameOpen] = useState(false);
++  const [deleteOpen, setDeleteOpen] = useState(false);
++  const [newName, setNewName] = useState(name);
++  const [error, setError] = useState(null);
++
++  const folderArgs = { folder, recursive: true };
++  const isEmpty = songCount === 0;
++
++  const goTo = (dir) => navigate(
++    `/library/playlists/${encodeURIComponent(dir)}${urlSearch}`,
++    { replace: true },
++  );
++
++  const rename = async () => {
++    const target = newName.trim();
++    if (!target || target === name) return setRenameOpen(false);
++    const { error } = await request('renamePlaylist', { name, new_name: target });
++    if (error) return setError(String(error?.message || error));
++    setRenameOpen(false);
++    goTo(`Playlists/${target}`);
++  };
++
++  const remove = async () => {
++    const { error } = await request('deletePlaylist', { name });
++    if (error) return setError(String(error?.message || error));
++    setDeleteOpen(false);
++    goTo('Playlists');
++  };
++
++  return (
++    <>
++      <Grid container sx={{ padding: '16px 8px 0' }}>
++        <Grid item xs={12}>
++          <Typography variant="h6" sx={{ fontWeight: 'bold' }} component="h1">
++            {name}
++          </Typography>
++          <Typography>
++            {songCount === 1 ? '1 song' : `${songCount} songs`}
++          </Typography>
++          {isEmpty &&
++            <Typography variant="body2" color="text.secondary">
++              Empty. Use + in the library to add songs.
++            </Typography>
++          }
++        </Grid>
++      </Grid>
++
++      <Grid container sx={{ padding: '0 8px' }}>
++        <Grid item xs={12}
++          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
++        >
++          <div>
++            {!isSelecting &&
++              <>
++                <IconButton
++                  aria-label="Rename playlist"
++                  onClick={() => { setNewName(name); setError(null); setRenameOpen(true); }}
++                >
++                  <EditOutlinedIcon />
++                </IconButton>
++                <IconButton
++                  aria-label="Delete playlist"
++                  onClick={() => { setError(null); setDeleteOpen(true); }}
++                >
++                  <DeleteOutlineIcon />
++                </IconButton>
++              </>
++            }
++          </div>
++          <div style={{ display: 'flex', alignItems: 'center' }}>
++            {isSelecting
++              ? <Button
++                  variant="outlined"
++                  onClick={() => registerMusicToCard('play_folder', folderArgs)}
++                  sx={{ margin: '20px 0 4px' }}
++                >
++                  {t('library.albums.assign-to-card')}
++                </Button>
++              : <>
++                  <IconButton
++                    aria-label="Add to playlist"
++                    onClick={() => setAddOpen(true)}
++                    disabled={isEmpty}
++                    sx={{ fontSize: 40 }}
++                  >
++                    <PlaylistAddIcon fontSize="inherit" />
++                  </IconButton>
++                  <IconButton
++                    aria-label="Play"
++                    onClick={() => request('play_folder', folderArgs)}
++                    disabled={isEmpty}
++                    sx={{ fontSize: 64 }}
++                  >
++                    <PlayCircleFilledRoundedIcon color="primary" fontSize="inherit" />
++                  </IconButton>
++                </>
++            }
++          </div>
++        </Grid>
++      </Grid>
++
++      <AddToPlaylistDialog
++        open={addOpen}
++        onClose={() => setAddOpen(false)}
++        item={folderArgs}
++      />
++
++      <Dialog open={renameOpen} onClose={() => setRenameOpen(false)} fullWidth>
++        <DialogTitle>Rename playlist</DialogTitle>
++        <DialogContent>
++          <TextField
++            autoFocus
++            fullWidth
++            variant="standard"
++            label="Name"
++            value={newName}
++            onChange={(e) => setNewName(e.target.value)}
++            onKeyDown={(e) => { if (e.key === 'Enter') rename(); }}
++          />
++          <DialogContentText sx={{ mt: 2 }}>{CARDS_NOTE}</DialogContentText>
++          {error && <DialogContentText color="error">{error}</DialogContentText>}
++        </DialogContent>
++        <DialogActions>
++          <Button onClick={() => setRenameOpen(false)}>Cancel</Button>
++          <Button onClick={rename} disabled={!newName.trim()}>Rename</Button>
++        </DialogActions>
++      </Dialog>
++
++      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
++        <DialogTitle>Delete "{name}"?</DialogTitle>
++        <DialogContent>
++          <DialogContentText>
++            The playlist is removed; the songs themselves stay in your library. {CARDS_NOTE}
++          </DialogContentText>
++          {error && <DialogContentText color="error">{error}</DialogContentText>}
++        </DialogContent>
++        <DialogActions>
++          <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
++          <Button onClick={remove} color="error">Delete</Button>
++        </DialogActions>
++      </Dialog>
++    </>
++  );
++};
++
++export default PlaylistBanner;
 diff --git a/src/webapp/src/components/Library/lists/index.js b/src/webapp/src/components/Library/lists/index.js
 index e2b7a2d..5060b5e 100644
 --- a/src/webapp/src/components/Library/lists/index.js

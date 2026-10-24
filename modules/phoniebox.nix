@@ -55,6 +55,7 @@ let
 
   copypartyConf = pkgs.writeText "copyparty.conf" ''
     [global]
+      hist: ${cfg.stateDir}/copyparty-hist
       p: ${toString cfg.copyparty.port}
       no-thumb
       q
