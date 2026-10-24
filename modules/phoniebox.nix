@@ -68,7 +68,7 @@ let
     [/music]
       ${S}/shared/audiofolders
       accs:
-        rwmd: ${cfg.user}
+        rwmd: *
   '';
 
   evdevFile = settingsFormat.generate "evdev.yaml" {
@@ -149,8 +149,53 @@ let
     dhcp-authoritative
   '';
 
+  loginDir = "${cfg.stateDir}/login";
+
+  # `sudo phoniebox-set-password` sets or changes the web login; `--off` removes it
+  setPassword = pkgs.writeShellApplication {
+    name = "phoniebox-set-password";
+    runtimeInputs = [
+      config.services.caddy.package
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      if [ "$(id -u)" -ne 0 ]; then
+        echo "Run with sudo." >&2
+        exit 1
+      fi
+      file=${loginDir}/login.caddy
+
+      if [ "''${1:-}" = "--off" ]; then
+        rm -f "$file"
+        systemctl reload caddy
+        echo "Login removed: the jukebox is open to everyone on the network."
+        exit 0
+      fi
+
+      hash=$(caddy hash-password)
+      tmp=$(mktemp ${loginDir}/.login.XXXXXX)
+      printf 'basic_auth @phoniebox_protected {\n\t%s %s\n}\n' ${lib.escapeShellArg cfg.login.user} "$hash" > "$tmp"
+      chown root:${config.services.caddy.group} "$tmp"
+      chmod 0640 "$tmp"
+      mv "$tmp" "$file"
+      systemctl reload caddy
+      echo "Login set for user '${cfg.login.user}'."
+    '';
+  };
+
 in
 {
+  imports = [
+    (lib.mkRemovedOptionModule [ "services" "phoniebox" "copyparty" "accountsFile" ]
+      "copyparty now runs without accounts, reachable only through the web app (Caddy); protect it with the web login instead."
+    )
+  ];
+
+  warnings =
+    lib.optional (cfg.login.enable && cfg.openFirewall)
+      "services.phoniebox: the login only protects the web port; any other ports openFirewall opens (e.g. 5556/5557) bypass it.";
+
   options.services.phoniebox = {
 
     enable = lib.mkEnableOption "Phoniebox RFID jukebox";
@@ -194,16 +239,23 @@ in
       default = 80;
     };
 
+    login = {
+      enable = lib.mkEnableOption ''
+        a login in front of the web app and uploads (HTTP basic auth via Caddy).
+        Set the password on the box with `sudo phoniebox-set-password`; until then, no login is asked
+      '';
+      user = lib.mkOption {
+        type = lib.types.str;
+        default = "phoniebox";
+        description = "Login name.";
+      };
+    };
+
     copyparty = {
       enable = lib.mkEnableOption "copyparty web upload for the music folder";
       port = lib.mkOption {
         type = lib.types.port;
         default = 3923;
-      };
-      accountsFile = lib.mkOption {
-        type = lib.types.str;
-        default = "${cfg.stateDir}/copyparty-accounts.conf";
-        description = "copyparty config file with an [accounts] section. Keep it out of the Nix store.";
       };
     };
 
@@ -397,7 +449,7 @@ in
           wantedBy = [ "default.target" ];
           unitConfig.ConditionUser = cfg.user;
           serviceConfig = {
-            ExecStart = "${pkgs.copyparty}/bin/copyparty -c ${copypartyConf} -c ${cfg.copyparty.accountsFile}";
+            ExecStart = "${pkgs.copyparty}/bin/copyparty -c ${copypartyConf}";
             Restart = "on-failure";
           };
         };
@@ -494,7 +546,11 @@ in
         services.caddy = {
           enable = true;
           virtualHosts.":${toString cfg.webPort}".extraConfig =
-            lib.optionalString h.enable ''
+            lib.optionalString cfg.login.enable ''
+              @phoniebox_protected not path /captive-portal/*
+              import ${loginDir}/*.caddy
+            ''
+            + lib.optionalString h.enable ''
               @captive {
                 remote_ip ${hotspotPrefix}.0/24
                 not host ${h.address}
@@ -550,6 +606,17 @@ in
 
       (lib.mkIf (cfg.audio.secondary != null) {
         services.phoniebox.settings.pulse.outputs.secondary = toOutput cfg.audio.secondary;
+      })
+
+      (lib.mkIf cfg.login.enable {
+        environment.systemPackages = [ setPassword ];
+
+        systemd.tmpfiles.rules = [
+          "d ${loginDir} 0750 root ${config.services.caddy.group} -"
+          # Always at least one file for the import to match, so it never depends
+          # on Caddy accepting an import that matches nothing
+          "f ${loginDir}/00-empty.caddy 0640 root ${config.services.caddy.group} -"
+        ];
       })
 
       (lib.mkIf cfg.display.enable {
