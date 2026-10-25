@@ -1,0 +1,88 @@
+diff --git a/src/components/Library/lists/albums/album-list/album-list-item.jsx b/src/components/Library/lists/albums/album-list/album-list-item.jsx
+index 6916fe6..a44b606 100644
+--- a/src/components/Library/lists/albums/album-list/album-list-item.jsx
++++ b/src/components/Library/lists/albums/album-list/album-list-item.jsx
+@@ -17,6 +17,7 @@ import noCover from '../../../../../assets/noCover.jpg';
+ 
+ import AppSettingsContext from '../../../../../context/appsettings/context';
+ import request from '../../../../../utils/request';
++import useInView from '../../../../../utils/use-in-view';
+ 
+ const AlbumListItem = ({
+   albumartist,
+@@ -39,6 +40,8 @@ const AlbumListItem = ({
+     show_covers,
+   } = settings;
+ 
++  const [coverRef, inView] = useInView();
++
+   useEffect(() => {
+     const getCoverArt = async () => {
+       const { result } = await request('getAlbumCoverArt', {
+@@ -58,10 +61,10 @@ const AlbumListItem = ({
+     if (cover_url) {
+       setCoverImage(cover_url);
+     }
+-    else if (albumartist && album && show_covers) {
++    else if (albumartist && album && show_covers && inView) {
+       getCoverArt();
+     }
+-  }, [albumartist, album, content_uri, cover_url, provider, show_covers]);
++  }, [albumartist, album, content_uri, cover_url, provider, show_covers, inView]);
+ 
+   const AlbumLink = forwardRef((props, ref) => {
+     const artist = encodeURIComponent(albumartist || t('library.albums.unknown-artist'));
+@@ -83,7 +86,7 @@ const AlbumListItem = ({
+   const content = (
+     <>
+       {show_covers &&
+-        <ListItemAvatar>
++        <ListItemAvatar ref={coverRef}>
+           <Avatar variant="rounded" alt="Cover" src={coverImage} />
+         </ListItemAvatar>
+       }
+diff --git a/src/utils/use-in-view.js b/src/utils/use-in-view.js
+new file mode 100644
+index 0000000..5afd6ac
+--- /dev/null
++++ b/src/utils/use-in-view.js
+@@ -0,0 +1,39 @@
++import { useEffect, useRef, useState } from 'react';
++
++// Becomes true once the element has been on (or near) the screen for `delay` ms,
++// then stays true. Attach the returned ref to the element to watch.
++const useInView = ({ rootMargin = '300px', delay = 150 } = {}) => {
++  const ref = useRef(null);
++  const [inView, setInView] = useState(false);
++
++  useEffect(() => {
++    if (inView || !ref.current) return undefined;
++
++    // Very old browsers: just load everything, as before
++    if (!('IntersectionObserver' in window)) {
++      setInView(true);
++      return undefined;
++    }
++
++    let timer = null;
++    const observer = new IntersectionObserver(([entry]) => {
++      if (entry.isIntersecting) {
++        timer = setTimeout(() => setInView(true), delay);
++      } else if (timer) {
++        // Scrolled past before the pause was over: don't load
++        clearTimeout(timer);
++        timer = null;
++      }
++    }, { rootMargin });
++
++    observer.observe(ref.current);
++    return () => {
++      observer.disconnect();
++      if (timer) clearTimeout(timer);
++    };
++  }, [inView, rootMargin, delay]);
++
++  return [ref, inView];
++};
++
++export default useInView;
