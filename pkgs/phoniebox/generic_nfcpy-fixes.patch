@@ -1070,7 +1070,7 @@ index 0000000..95b028c
 +
 +export default AddToPlaylistDialog;
 diff --git a/src/webapp/src/components/Library/library-header.js b/src/webapp/src/components/Library/library-header.js
-index ab894f2..b1143b5 100644
+index ab894f2..fd051bb 100644
 --- a/src/webapp/src/components/Library/library-header.js
 +++ b/src/webapp/src/components/Library/library-header.js
 @@ -1,4 +1,4 @@
@@ -1079,7 +1079,7 @@ index ab894f2..b1143b5 100644
  import {
    useLocation,
    useNavigate,
-@@ -7,14 +7,21 @@ import {
+@@ -7,94 +7,101 @@ import {
  import { useTranslation } from 'react-i18next';
  
  import {
@@ -1102,9 +1102,11 @@ index ab894f2..b1143b5 100644
 +import FolderIcon from '@mui/icons-material/Folder';
 +import QueueMusicIcon from '@mui/icons-material/QueueMusic';
  import SearchIcon from '@mui/icons-material/Search';
++import PodcastsIcon from '@mui/icons-material/Podcasts';
++import RadioIcon from '@mui/icons-material/Radio';
  
  const LibraryHeader = ({ handleMusicFilter, musicFilter }) => {
-@@ -22,79 +29,77 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter }) => {
+   const { search: urlSearch } = useLocation();
    const navigate = useNavigate();
    const { '*': view } = useParams();
    const { t } = useTranslation();
@@ -1664,7 +1666,7 @@ index 1f55415..4ae8772 100644
    return <Link ref={ref} to={location} {...props} />
  });
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
-index 3be77fb..66d4b67 100644
+index 3be77fb..cb8b403 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 @@ -1,5 +1,4 @@
@@ -1674,7 +1676,7 @@ index 3be77fb..66d4b67 100644
  
  import {
    IconButton,
-@@ -8,26 +7,44 @@ import {
+@@ -8,26 +7,43 @@ import {
    ListItemText,
  } from '@mui/material';
  
@@ -1697,7 +1699,6 @@ index 3be77fb..66d4b67 100644
 +import ListItemAvatar from '@mui/material/ListItemAvatar';
 +import QueueMusicIcon from '@mui/icons-material/QueueMusic';
 +
-+import { getPlaylistName } from '../../../../utils/playlists';
 +import { getCollectionKind } from '../../../../utils/playlists';
 +
  const FolderListItem = ({
@@ -1724,7 +1725,7 @@ index 3be77fb..66d4b67 100644
        default: return;
      }
    }
-@@ -36,33 +53,132 @@ const FolderListItem = ({
+@@ -36,33 +52,132 @@ const FolderListItem = ({
      switch(type) {
        case 'directory': return registerMusicToCard('play_folder', { folder: relpath, recursive: true });
        case 'file': return registerMusicToCard('play_single', { song_url: relpath });
