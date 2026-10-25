@@ -1,0 +1,149 @@
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index e5d54ae..f6d35ca 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -14,11 +14,13 @@ import {
+ } from "@mui/material";
+ 
+ import { listLibraryEntries } from '../../../../utils/library-api';
++import request from '../../../../utils/request';
+ import useScrollMemory from '../../../../utils/use-scroll-memory';
+ import CreateFolderDialog from './create-folder-dialog';
+ import DeleteEntriesDialog from './delete-entries-dialog';
+ import FolderList from "./folder-list";
+ import LibraryActions from './library-actions';
++import PlaylistBanner from './playlist-banner';
+ import UploadDialog from './upload-dialog';
+ import {
+   uploadSelectionFromDataTransfer,
+@@ -39,6 +41,7 @@ const Folders = ({
+   const { t } = useTranslation();
+   const { provider, view, dir = ROOT_DIR } = useParams();
+   const [folders, setFolders] = useState([]);
++  const [playlistTracks, setPlaylistTracks] = useState(null);
+   const [error, setError] = useState(null);
+   const [isLoading, setIsLoading] = useState(true);
+   const [reloadNumber, setReloadNumber] = useState(0);
+@@ -68,7 +71,18 @@ const Folders = ({
+       setError(null);
+       try {
+         const entries = await listLibraryEntries(currentFolder);
+-        if (isCurrent) setFolders(entries);
++        if (!isCurrent) return;
++        setFolders(entries);
++
++        // A folder containing a playlist file is shown expanded (its resolved
++        // tracks) rather than as a raw file listing - same as card playback sees it.
++        if (entries.some(({ type }) => type === 'playlist')) {
++          const { result } = await request('folderList', { folder: currentFolder });
++          if (isCurrent) setPlaylistTracks(result || []);
++        }
++        else if (isCurrent) {
++          setPlaylistTracks(null);
++        }
+       }
+       catch (requestError) {
+         if (isCurrent) setError(requestError);
+@@ -144,12 +158,18 @@ const Folders = ({
+     }
+   };
+ 
+-  const filteredFolders = folders.filter(search);
++  const isPlaylistFolder = playlistTracks !== null;
++  const filteredFolders = (isPlaylistFolder ? playlistTracks : folders).filter(search);
++  const playlistFile = folders.find(({ type }) => type === 'playlist');
++  const playlistName = playlistFile?.name.replace(/\.(m3u8?|pls)$/i, '');
++  const playlistTrackCount = isPlaylistFolder
++    ? playlistTracks.filter(({ type }) => type !== 'directory').length
++    : 0;
+ 
+   return (
+     <Box
+       onDragEnter={(event) => {
+-        if (isSelecting || isPlaylists) return;
++        if (isSelecting || isPlaylists || isPlaylistFolder) return;
+         event.preventDefault();
+         setIsDragging(true);
+       }}
+@@ -157,10 +177,10 @@ const Folders = ({
+         if (event.currentTarget === event.target) setIsDragging(false);
+       }}
+       onDragOver={(event) => {
+-        if (!isSelecting && !isPlaylists) event.preventDefault();
++        if (!isSelecting && !isPlaylists && !isPlaylistFolder) event.preventDefault();
+       }}
+       onDrop={(event) => {
+-        if (!isSelecting && !isPlaylists) handleDrop(event);
++        if (!isSelecting && !isPlaylists && !isPlaylistFolder) handleDrop(event);
+       }}
+       sx={{
+         minWidth: 0,
+@@ -171,7 +191,10 @@ const Folders = ({
+       }}
+     >
+       <div ref={scrollRef} />
+-      {!isSelecting &&
++      {isPlaylistFolder &&
++        <PlaylistBanner name={playlistName} trackCount={playlistTrackCount} />
++      }
++      {!isSelecting && !isPlaylistFolder &&
+         <LibraryActions
+           isPlaylists={isPlaylists}
+           isSelecting={isManagementSelecting}
+diff --git a/public/locales/en/translation.json b/public/locales/en/translation.json
+index 06d84ea..d40dfe1 100644
+--- a/public/locales/en/translation.json
++++ b/public/locales/en/translation.json
+@@ -155,6 +155,8 @@
+       "empty-folder": "This folder is empty! 🙈",
+       "show-folder-content": "Show folder content",
+       "back-button-label": "Back",
++      "playlist-banner_one": "Playlist: {{name}} ({{count}} track)",
++      "playlist-banner_other": "Playlist: {{name}} ({{count}} tracks)",
+       "manager": {
+         "actions-label": "Library file actions",
+         "upload": "Upload",
+diff --git a/public/locales/de/translation.json b/public/locales/de/translation.json
+index ba36548..3644356 100644
+--- a/public/locales/de/translation.json
++++ b/public/locales/de/translation.json
+@@ -155,6 +155,8 @@
+       "empty-folder": "Dieser Ordner ist leer! 🙈",
+       "show-folder-content": "Zeige den Ordnerinhalt an",
+       "back-button-label": "Zurück",
++      "playlist-banner_one": "Playlist: {{name}} ({{count}} Titel)",
++      "playlist-banner_other": "Playlist: {{name}} ({{count}} Titel)",
+       "manager": {
+         "actions-label": "Aktionen für Bibliotheksdateien",
+         "upload": "Hochladen",
+diff --git a/src/components/Library/lists/folders/playlist-banner.jsx b/src/components/Library/lists/folders/playlist-banner.jsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/Library/lists/folders/playlist-banner.jsx
+@@ -0,0 +1,26 @@
++import { useTranslation } from 'react-i18next';
++
++import { Box, Typography } from '@mui/material';
++import QueueMusicIcon from '@mui/icons-material/QueueMusic';
++
++const PlaylistBanner = ({ name, trackCount }) => {
++  const { t } = useTranslation();
++
++  return (
++    <Box
++      sx={{
++        alignItems: 'center',
++        display: 'flex',
++        gap: 1,
++        marginBottom: 1,
++      }}
++    >
++      <QueueMusicIcon color="primary" />
++      <Typography variant="subtitle1">
++        {t('library.folders.playlist-banner', { count: trackCount, name })}
++      </Typography>
++    </Box>
++  );
++};
++
++export default PlaylistBanner;

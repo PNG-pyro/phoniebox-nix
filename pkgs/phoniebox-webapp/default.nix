@@ -23,6 +23,7 @@ buildNpmPackage {
     ../../patches/playlists-view-webapp.patch
     ../../patches/playlist-root-boundary.patch
     ../../patches/playlist-actions.patch
+    ../../patches/playlist-expanded-view.patch
   ];
 
   env = {
