@@ -423,7 +423,7 @@ in
         services.phoniebox.settings = {
           webapp.coverart_cache_path = lib.mkDefault "../../shared/cover-cache";
           playermpd.mpd_conf = lib.mkDefault "${S}/mpd.conf";
-
+          modules.named.player = lib.mkDefault "player.plugin";
           # Raspberry Pi OS workaround: makes the whole music library world-writable on
           # every start. Not needed on NixOS, where permissions are already right.
           playermpd.library.check_user_rights = lib.mkDefault false;
@@ -452,8 +452,6 @@ in
 
         networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall ([
           cfg.webPort
-          5556
-          5557
         ]);
 
         security.sudo.extraRules = [
@@ -565,11 +563,8 @@ in
                 root * ${S}/shared/logs
                 file_server browse
               }
-              handle_path /rpc* {
+              handle /api/* {
                 reverse_proxy localhost:5556
-              }
-              handle_path /pub* {
-                reverse_proxy localhost:5557
               }
               handle /upload* {
                 reverse_proxy localhost:${toString cfg.copyparty.port}
@@ -610,9 +605,6 @@ in
           # on Caddy accepting an import that matches nothing
           "f ${loginDir}/00-empty.caddy 0640 root ${config.services.caddy.group} -"
         ];
-        warnings =
-          lib.optional (cfg.login.enable && cfg.openFirewall)
-            "services.phoniebox: the login only protects the web port; any other ports openFirewall opens (e.g. 5556/5557) bypass it.";
       })
 
       (lib.mkIf cfg.display.enable {

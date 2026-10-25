@@ -32,7 +32,7 @@ let
       inherit rev;
       hash = "sha256-mRTTY/R4Bh9zlsejxJjNt/bgdS3YiySUFg7f2Z6gKuM=";
     };
-    patches = [ ]; # or whatever you've renamed it to
+    patches = [ ../../patches/reader.patch ]; # or whatever you've renamed it to
   };
 
   py = python3.withPackages (
