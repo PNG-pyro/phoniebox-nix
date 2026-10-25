@@ -30,6 +30,7 @@ buildNpmPackage {
     ../../patches/podcasts-collection-support.patch
     ../../patches/radio-collection-support.patch
     ../../patches/compact-view-tabs.patch
+    ../../patches/responsive-view-tabs.patch
   ];
 
   env = {

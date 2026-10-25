@@ -1,0 +1,16 @@
+diff --git a/src/components/Library/library-header.jsx b/src/components/Library/library-header.jsx
+index 57ff3a9..f579998 100644
+--- a/src/components/Library/library-header.jsx
++++ b/src/components/Library/library-header.jsx
+@@ -115,6 +115,11 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter, sources }) => {
+                 icon={Icon && <Icon fontSize="small" />}
+                 key={id}
+                 label={activeView === id ? t(`library.header.${id}`, { defaultValue: label }) : undefined}
++                sx={{
++                  minHeight: 48,
++                  minWidth: 0,
++                  padding: activeView === id ? '6px 12px' : '6px',
++                }}
+                 value={id}
+               />
+             );
