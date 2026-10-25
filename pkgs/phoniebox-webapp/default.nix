@@ -19,6 +19,7 @@ buildNpmPackage {
   patches = [
     ../../patches/scroll-memory.patch
     ../../patches/lazy-covers.patch
+    ../../patches/floating-back-button.patch
   ];
 
   env = {

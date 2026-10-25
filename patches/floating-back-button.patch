@@ -1,0 +1,129 @@
+diff --git a/src/components/Library/lists/folders/floating-back-bar.jsx b/src/components/Library/lists/folders/floating-back-bar.jsx
+new file mode 100644
+index 0000000..a82b8f2
+--- /dev/null
++++ b/src/components/Library/lists/folders/floating-back-bar.jsx
+@@ -0,0 +1,59 @@
++import { useEffect, useState } from 'react';
++import { useTranslation } from 'react-i18next';
++
++import {
++  Box,
++  Fade,
++  IconButton,
++} from '@mui/material';
++import ArrowBackIcon from '@mui/icons-material/ArrowBack';
++
++import FolderLink from './folder-link';
++
++// Only show the shortcut once the real back row (top of the list) has scrolled out of view
++const SCROLL_THRESHOLD = 150;
++
++const FloatingBackBar = ({ dir }) => {
++  const { t } = useTranslation();
++  const [visible, setVisible] = useState(false);
++
++  useEffect(() => {
++    if (!dir) return undefined;
++
++    const onScroll = () => setVisible(window.scrollY > SCROLL_THRESHOLD);
++    onScroll();
++    window.addEventListener('scroll', onScroll, { passive: true });
++    return () => window.removeEventListener('scroll', onScroll);
++  }, [dir]);
++
++  if (!dir) return null;
++
++  return (
++    <Fade in={visible} unmountOnExit>
++      <Box
++        sx={{
++          position: 'fixed',
++          top: 0,
++          left: 0,
++          zIndex: 1100,
++          bgcolor: 'background.paper',
++          boxShadow: 3,
++          borderRadius: '0 0 50% 0',
++        }}
++      >
++        <IconButton
++          aria-label={t('library.folders.back-button-label')}
++          component={FolderLink}
++          data={{ dir }}
++          nativeButton={false}
++          size="large"
++          title={t('library.folders.back-button-label')}
++        >
++          <ArrowBackIcon />
++        </IconButton>
++      </Box>
++    </Fade>
++  );
++};
++
++export default FloatingBackBar;
+diff --git a/src/components/Library/lists/folders/folder-list.jsx b/src/components/Library/lists/folders/folder-list.jsx
+index 0e8d4f2..c16cbb7 100644
+--- a/src/components/Library/lists/folders/folder-list.jsx
++++ b/src/components/Library/lists/folders/folder-list.jsx
+@@ -8,6 +8,7 @@ import {
+   Typography,
+ } from '@mui/material';
+ 
++import FloatingBackBar from './floating-back-bar';
+ import FolderListItem from './folder-list-item';
+ import FolderListItemBack from './folder-list-item-back';
+ 
+@@ -36,27 +37,30 @@ const FolderList = ({
+   const parentDir = getParentDir(dir);
+ 
+   return (
+-    <List sx={{ width: '100%' }}>
+-      {parentDir &&
+-        <FolderListItemBack dir={parentDir} />
+-      }
+-      {folders.length === 0 &&
+-        <ListItem sx={{ justifyContent: 'center' }}>
+-          <Typography>{t('library.folders.empty-folder')}</Typography>
+-        </ListItem>
+-      }
+-      {folders.length > 0 && folders.map((folder, key) =>
+-        <FolderListItem
+-          key={folder.relpath || key}
+-          folder={folder}
+-          isManagementSelecting={isManagementSelecting}
+-          isSelecting={isSelecting}
+-          isSelected={selectedPaths.has(folder.relpath)}
+-          onToggleSelected={onToggleSelected}
+-          registerMusicToCard={registerMusicToCard}
+-        />
+-      )}
+-    </List>
++    <>
++      <List sx={{ width: '100%' }}>
++        {parentDir &&
++          <FolderListItemBack dir={parentDir} />
++        }
++        {folders.length === 0 &&
++          <ListItem sx={{ justifyContent: 'center' }}>
++            <Typography>{t('library.folders.empty-folder')}</Typography>
++          </ListItem>
++        }
++        {folders.length > 0 && folders.map((folder, key) =>
++          <FolderListItem
++            key={folder.relpath || key}
++            folder={folder}
++            isManagementSelecting={isManagementSelecting}
++            isSelecting={isSelecting}
++            isSelected={selectedPaths.has(folder.relpath)}
++            onToggleSelected={onToggleSelected}
++            registerMusicToCard={registerMusicToCard}
++          />
++        )}
++      </List>
++      <FloatingBackBar dir={parentDir} />
++    </>
+   );
+ }
+ 
