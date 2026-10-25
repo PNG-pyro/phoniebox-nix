@@ -20,6 +20,7 @@ buildNpmPackage {
     ../../patches/scroll-memory.patch
     ../../patches/lazy-covers.patch
     ../../patches/floating-back-button.patch
+    ../../patches/playlists-view-webapp.patch
   ];
 
   env = {

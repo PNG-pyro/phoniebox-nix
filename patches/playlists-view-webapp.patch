@@ -1,0 +1,35 @@
+diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
+index a719bd7..0ba7117 100644
+--- a/src/components/Library/lists/index.jsx
++++ b/src/components/Library/lists/index.jsx
+@@ -22,6 +22,7 @@ import SelectorHeader from "../selector-header";
+ 
+ import { buildActionData } from '../../Cards/utils';
+ import request from '../../../utils/request';
++import { ROOT_DIR } from '../../../config';
+ 
+ const LOCAL_SOURCE = {
+   id: 'mpd',
+@@ -39,6 +40,13 @@ const LOCAL_SOURCE = {
+       kind: 'folders',
+       content_types: [],
+     },
++    {
++      id: 'playlists',
++      label: 'Playlists',
++      kind: 'folders',
++      content_types: [],
++      root_dir: 'Playlists',
++    },
+   ],
+ };
+ 
+@@ -68,7 +76,7 @@ const LibrarySourceView = ({
+   if (sourceView.kind === 'folders') {
+     return (
+       <RedirectWithSearch
+-        to={`/library/${provider}/${view}/.%2F`}
++        to={`/library/${provider}/${view}/${encodeURIComponent(sourceView.root_dir || ROOT_DIR)}`}
+       />
+     );
+   }
