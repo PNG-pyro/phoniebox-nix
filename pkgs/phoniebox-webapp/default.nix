@@ -21,6 +21,7 @@ buildNpmPackage {
     ../../patches/lazy-covers.patch
     ../../patches/floating-back-button.patch
     ../../patches/playlists-view-webapp.patch
+    ../../patches/playlist-root-boundary.patch
   ];
 
   env = {

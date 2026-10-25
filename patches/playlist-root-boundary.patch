@@ -1,0 +1,53 @@
+diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
+index 0ba7117..f606ec9 100644
+--- a/src/components/Library/lists/index.jsx
++++ b/src/components/Library/lists/index.jsx
+@@ -112,6 +112,7 @@ const LibraryFolderView = ({
+       musicFilter={musicFilter}
+       isSelecting={isSelecting}
+       registerMusicToCard={registerMusicToCard}
++      rootDir={sourceView.root_dir || ROOT_DIR}
+     />
+   );
+ };
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index ef95a73..faf1faa 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -33,6 +33,7 @@ const Folders = ({
+   musicFilter,
+   isSelecting,
+   registerMusicToCard,
++  rootDir = ROOT_DIR,
+ }) => {
+   const { t } = useTranslation();
+   const { provider, view, dir = ROOT_DIR } = useParams();
+@@ -209,6 +210,7 @@ const Folders = ({
+           isSelecting={isSelecting}
+           onToggleSelected={toggleSelected}
+           registerMusicToCard={registerMusicToCard}
++          rootDir={rootDir}
+           selectedPaths={selectedPaths}
+         />
+       }
+diff --git a/src/components/Library/lists/folders/folder-list.jsx b/src/components/Library/lists/folders/folder-list.jsx
+index c16cbb7..eaa51ad 100644
+--- a/src/components/Library/lists/folders/folder-list.jsx
++++ b/src/components/Library/lists/folders/folder-list.jsx
+@@ -21,6 +21,7 @@ const FolderList = ({
+   isSelecting,
+   onToggleSelected,
+   registerMusicToCard,
++  rootDir = ROOT_DIR,
+   selectedPaths,
+ }) => {
+   const { t } = useTranslation();
+@@ -28,7 +29,7 @@ const FolderList = ({
+   const getParentDir = (dir) => {
+     const decodedDir = decodeURIComponent(dir);
+ 
+-    if (decodedDir === ROOT_DIR) return undefined;
++    if (decodedDir === rootDir) return undefined;
+ 
+     const parentDir = dropLast(1, decodedDir.split('/')).join('/') || ROOT_DIR;
+     return parentDir;
