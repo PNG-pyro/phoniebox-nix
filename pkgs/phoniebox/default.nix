@@ -35,6 +35,7 @@ let
     patches = [
       ../../patches/reader.patch
       ../../patches/playlists-view-daemon.patch
+      ../../patches/podcasts-view-daemon.patch
     ];
   };
 

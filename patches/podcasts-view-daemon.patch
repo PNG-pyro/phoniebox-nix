@@ -1,0 +1,18 @@
+diff --git a/src/jukebox/components/player/backends/mpd.py b/src/jukebox/components/player/backends/mpd.py
+index 4868600..e2fdba2 100644
+--- a/src/jukebox/components/player/backends/mpd.py
++++ b/src/jukebox/components/player/backends/mpd.py
+@@ -714,6 +714,13 @@ class PlayerMPD:
+                     'content_types': [],
+                     'root_dir': 'Playlists',
+                 },
++                {
++                    'id': 'podcasts',
++                    'label': 'Podcasts',
++                    'kind': 'folders',
++                    'content_types': [],
++                    'root_dir': 'Podcasts',
++                },
+             ],
+         }
+ 

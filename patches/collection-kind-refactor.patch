@@ -1,0 +1,460 @@
+diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
+index e6c1c10..d3ad378 100644
+--- a/src/components/Library/lists/index.jsx
++++ b/src/components/Library/lists/index.jsx
+@@ -50,6 +50,11 @@ const LOCAL_SOURCE = {
+   ],
+ };
+ 
++// Maps a library view id to the collection kind (see collection-kinds.js) it browses.
++const VIEW_COLLECTION_KIND = {
++  playlists: 'playlist',
++};
++
+ const RedirectWithSearch = ({ to }) => {
+   const [searchParams] = useSearchParams();
+   const search = searchParams.toString();
+@@ -109,7 +114,7 @@ const LibraryFolderView = ({
+ 
+   return (
+     <Folders
+-      isPlaylists={view === 'playlists'}
++      collectionKind={VIEW_COLLECTION_KIND[view]}
+       musicFilter={musicFilter}
+       isSelecting={isSelecting}
+       registerMusicToCard={registerMusicToCard}
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index 46be374..9bd51d4 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -16,6 +16,7 @@ import {
+ import { listLibraryEntries } from '../../../../utils/library-api';
+ import request from '../../../../utils/request';
+ import useScrollMemory from '../../../../utils/use-scroll-memory';
++import COLLECTION_KINDS from './collection-kinds';
+ import CreateFolderDialog from './create-folder-dialog';
+ import DeleteEntriesDialog from './delete-entries-dialog';
+ import FolderList from "./folder-list";
+@@ -32,7 +33,7 @@ import { ROOT_DIR } from '../../../../config';
+ const emptyUploadSelection = { files: [], folders: [] };
+ 
+ const Folders = ({
+-  isPlaylists,
++  collectionKind,
+   musicFilter,
+   isSelecting,
+   registerMusicToCard,
+@@ -40,8 +41,9 @@ const Folders = ({
+ }) => {
+   const { t } = useTranslation();
+   const { provider, view, dir = ROOT_DIR } = useParams();
++  const collection = COLLECTION_KINDS[collectionKind];
+   const [folders, setFolders] = useState([]);
+-  const [playlistTracks, setPlaylistTracks] = useState(null);
++  const [expandedEntries, setExpandedEntries] = useState(null);
+   const [error, setError] = useState(null);
+   const [isLoading, setIsLoading] = useState(true);
+   const [reloadNumber, setReloadNumber] = useState(0);
+@@ -74,14 +76,14 @@ const Folders = ({
+         if (!isCurrent) return;
+         setFolders(entries);
+ 
+-        // A folder containing a playlist file is shown expanded (its resolved
+-        // tracks) rather than as a raw file listing - same as card playback sees it.
+-        if (entries.some(({ type }) => type === 'playlist')) {
++        // A folder containing this collection's marker file is shown expanded (its
++        // resolved contents) rather than as a raw file listing - same as card playback sees it.
++        if (collection && entries.some(({ type }) => type === collection.markerType)) {
+           const { result } = await request('folderList', { folder: currentFolder });
+-          if (isCurrent) setPlaylistTracks(result || []);
++          if (isCurrent) setExpandedEntries(result || []);
+         }
+         else if (isCurrent) {
+-          setPlaylistTracks(null);
++          setExpandedEntries(null);
+         }
+       }
+       catch (requestError) {
+@@ -96,7 +98,7 @@ const Folders = ({
+     return () => {
+       isCurrent = false;
+     };
+-  }, [currentFolder, reloadNumber]);
++  }, [currentFolder, reloadNumber, collection]);
+ 
+   useEffect(() => {
+     setIsManagementSelecting(false);
+@@ -158,18 +160,17 @@ const Folders = ({
+     }
+   };
+ 
+-  const isPlaylistFolder = playlistTracks !== null;
+-  const filteredFolders = (isPlaylistFolder ? playlistTracks : folders).filter(search);
+-  const playlistFile = folders.find(({ type }) => type === 'playlist');
+-  const playlistName = playlistFile?.name.replace(/\.(m3u8?|pls)$/i, '');
+-  const playlistTrackCount = isPlaylistFolder
+-    ? playlistTracks.filter(({ type }) => type !== 'directory').length
++  const isCollectionFolder = expandedEntries !== null;
++  const filteredFolders = (isCollectionFolder ? expandedEntries : folders).filter(search);
++  const collectionName = currentFolder.split('/').filter(Boolean).pop() || currentFolder;
++  const collectionCount = isCollectionFolder
++    ? expandedEntries.filter(({ type }) => type !== 'directory').length
+     : 0;
+ 
+   return (
+     <Box
+       onDragEnter={(event) => {
+-        if (isSelecting || isPlaylists || isPlaylistFolder) return;
++        if (isSelecting || collection || isCollectionFolder) return;
+         event.preventDefault();
+         setIsDragging(true);
+       }}
+@@ -177,10 +178,10 @@ const Folders = ({
+         if (event.currentTarget === event.target) setIsDragging(false);
+       }}
+       onDragOver={(event) => {
+-        if (!isSelecting && !isPlaylists && !isPlaylistFolder) event.preventDefault();
++        if (!isSelecting && !collection && !isCollectionFolder) event.preventDefault();
+       }}
+       onDrop={(event) => {
+-        if (!isSelecting && !isPlaylists && !isPlaylistFolder) handleDrop(event);
++        if (!isSelecting && !collection && !isCollectionFolder) handleDrop(event);
+       }}
+       sx={{
+         minWidth: 0,
+@@ -191,12 +192,12 @@ const Folders = ({
+       }}
+     >
+       <div ref={scrollRef} />
+-      {isPlaylistFolder &&
+-        <PlaylistBanner name={playlistName} trackCount={playlistTrackCount} />
++      {isCollectionFolder &&
++        <PlaylistBanner collectionKind={collectionKind} count={collectionCount} name={collectionName} />
+       }
+-      {!isSelecting && !isPlaylistFolder &&
++      {!isSelecting && !isCollectionFolder &&
+         <LibraryActions
+-          isPlaylists={isPlaylists}
++          collectionKind={collectionKind}
+           isSelecting={isManagementSelecting}
+           onCancelSelection={cancelSelection}
+           onCreateFolder={() => setCreateDialogOpen(true)}
+@@ -229,11 +230,11 @@ const Folders = ({
+       }
+       {!isLoading && !error && (!musicFilter || filteredFolders.length > 0) &&
+         <FolderList
++          collectionKind={collectionKind}
+           dir={dir}
+           folders={filteredFolders}
++          isCollectionFolder={isCollectionFolder}
+           isManagementSelecting={isManagementSelecting}
+-          isPlaylistFolder={isPlaylistFolder}
+-          isPlaylists={isPlaylists}
+           isSelecting={isSelecting}
+           onToggleSelected={toggleSelected}
+           registerMusicToCard={registerMusicToCard}
+@@ -242,8 +243,8 @@ const Folders = ({
+         />
+       }
+       <CreateFolderDialog
++        collectionKind={collectionKind}
+         folder={currentFolder}
+-        isPlaylist={isPlaylists}
+         onClose={() => setCreateDialogOpen(false)}
+         onCreated={folderCreated}
+         open={createDialogOpen}
+diff --git a/src/components/Library/lists/folders/playlist-banner.jsx b/src/components/Library/lists/folders/playlist-banner.jsx
+index d51ccdb..224151d 100644
+--- a/src/components/Library/lists/folders/playlist-banner.jsx
++++ b/src/components/Library/lists/folders/playlist-banner.jsx
+@@ -3,8 +3,12 @@ import { useTranslation } from 'react-i18next';
+ import { Box, Typography } from '@mui/material';
+ import QueueMusicIcon from '@mui/icons-material/QueueMusic';
+ 
+-const PlaylistBanner = ({ name, trackCount }) => {
++import COLLECTION_KINDS from './collection-kinds';
++
++const PlaylistBanner = ({ collectionKind, count, name }) => {
+   const { t } = useTranslation();
++  const collection = COLLECTION_KINDS[collectionKind];
++  const Icon = collection?.icon || QueueMusicIcon;
+ 
+   return (
+     <Box
+@@ -15,9 +19,9 @@ const PlaylistBanner = ({ name, trackCount }) => {
+         marginBottom: 1,
+       }}
+     >
+-      <QueueMusicIcon color="primary" />
++      <Icon color="primary" />
+       <Typography variant="subtitle1">
+-        {t('library.folders.playlist-banner', { count: trackCount, name })}
++        {t(collection?.bannerKey || 'library.folders.playlist-banner', { count, name })}
+       </Typography>
+     </Box>
+   );
+diff --git a/src/components/Library/lists/folders/folder-list.jsx b/src/components/Library/lists/folders/folder-list.jsx
+index 50b8806..036def6 100644
+--- a/src/components/Library/lists/folders/folder-list.jsx
++++ b/src/components/Library/lists/folders/folder-list.jsx
+@@ -8,6 +8,7 @@ import {
+   Typography,
+ } from '@mui/material';
+ 
++import COLLECTION_KINDS from './collection-kinds';
+ import FloatingBackBar from './floating-back-bar';
+ import FolderListItem from './folder-list-item';
+ import FolderListItemBack from './folder-list-item-back';
+@@ -15,11 +16,11 @@ import FolderListItemBack from './folder-list-item-back';
+ import { ROOT_DIR } from '../../../../config';
+ 
+ const FolderList = ({
++  collectionKind,
+   dir,
+   folders,
++  isCollectionFolder,
+   isManagementSelecting,
+-  isPlaylistFolder,
+-  isPlaylists,
+   isSelecting,
+   onToggleSelected,
+   registerMusicToCard,
+@@ -27,6 +28,7 @@ const FolderList = ({
+   selectedPaths,
+ }) => {
+   const { t } = useTranslation();
++  const collection = COLLECTION_KINDS[collectionKind];
+ 
+   const getParentDir = (dir) => {
+     const decodedDir = decodeURIComponent(dir);
+@@ -48,16 +50,16 @@ const FolderList = ({
+         {folders.length === 0 &&
+           <ListItem sx={{ justifyContent: 'center' }}>
+             <Typography>
+-              {t(isPlaylistFolder ? 'library.folders.empty-playlist' : 'library.folders.empty-folder')}
++              {t(isCollectionFolder && collection ? collection.emptyKey : 'library.folders.empty-folder')}
+             </Typography>
+           </ListItem>
+         }
+         {folders.length > 0 && folders.map((folder, key) =>
+           <FolderListItem
++            collectionKind={collectionKind}
+             key={folder.relpath || key}
+             folder={folder}
+             isManagementSelecting={isManagementSelecting}
+-            isPlaylists={isPlaylists}
+             isSelecting={isSelecting}
+             isSelected={selectedPaths.has(folder.relpath)}
+             onToggleSelected={onToggleSelected}
+diff --git a/src/components/Library/lists/folders/folder-list-item.jsx b/src/components/Library/lists/folders/folder-list-item.jsx
+index 1804146..9e1e0a8 100644
+--- a/src/components/Library/lists/folders/folder-list-item.jsx
++++ b/src/components/Library/lists/folders/folder-list-item.jsx
+@@ -17,9 +17,9 @@ import FolderLink from './folder-link';
+ import FolderTypeAvatar from './folder-type-avatar';
+ 
+ const FolderListItem = ({
++  collectionKind,
+   folder,
+   isManagementSelecting,
+-  isPlaylists,
+   isSelecting,
+   isSelected,
+   onToggleSelected,
+@@ -93,7 +93,7 @@ const FolderListItem = ({
+             />
+           </ListItemIcon>
+         }
+-        <FolderTypeAvatar isPlaylists={isPlaylists} type={type} />
++        <FolderTypeAvatar collectionKind={collectionKind} type={type} />
+         <ListItemText
+           primary={name}
+           slotProps={{
+diff --git a/src/components/Library/lists/folders/folder-type-avatar.jsx b/src/components/Library/lists/folders/folder-type-avatar.jsx
+index 094e4ef..b9dbe58 100644
+--- a/src/components/Library/lists/folders/folder-type-avatar.jsx
++++ b/src/components/Library/lists/folders/folder-type-avatar.jsx
+@@ -12,18 +12,24 @@ import PodcastsIcon from '@mui/icons-material/Podcasts';
+ import QueueMusicIcon from '@mui/icons-material/QueueMusic';
+ import RadioIcon from '@mui/icons-material/Radio';
+ 
+-const FolderTypeAvatar = ({ isPlaylists, type }) => (
+-  <ListItemAvatar>
+-    <Avatar>
+-      {type === 'directory' && (isPlaylists ? <QueueMusicIcon /> : <FolderIcon />)}
+-      {type === 'file' && <MusicNoteIcon />}
+-      {type === 'image' && <ImageIcon />}
+-      {type === 'playlist' && <QueueMusicIcon />}
+-      {type === 'podcast' && <PodcastsIcon />}
+-      {type === 'stream' && <RadioIcon />}
+-      {type === 'other' && <InsertDriveFileIcon />}
+-    </Avatar>
+-  </ListItemAvatar>
+-);
++import COLLECTION_KINDS from './collection-kinds';
++
++const FolderTypeAvatar = ({ collectionKind, type }) => {
++  const CollectionIcon = COLLECTION_KINDS[collectionKind]?.icon;
++
++  return (
++    <ListItemAvatar>
++      <Avatar>
++        {type === 'directory' && (CollectionIcon ? <CollectionIcon /> : <FolderIcon />)}
++        {type === 'file' && <MusicNoteIcon />}
++        {type === 'image' && <ImageIcon />}
++        {type === 'playlist' && <QueueMusicIcon />}
++        {type === 'podcast' && <PodcastsIcon />}
++        {type === 'stream' && <RadioIcon />}
++        {type === 'other' && <InsertDriveFileIcon />}
++      </Avatar>
++    </ListItemAvatar>
++  );
++};
+ 
+ export default FolderTypeAvatar;
+diff --git a/src/components/Library/lists/folders/library-actions.jsx b/src/components/Library/lists/folders/library-actions.jsx
+index ecb574d..4cfcc47 100644
+--- a/src/components/Library/lists/folders/library-actions.jsx
++++ b/src/components/Library/lists/folders/library-actions.jsx
+@@ -19,10 +19,10 @@ import CloseIcon from '@mui/icons-material/Close';
+ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+ import DeleteIcon from '@mui/icons-material/Delete';
+ import DriveFolderUploadIcon from '@mui/icons-material/DriveFolderUpload';
+-import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+ import UploadFileIcon from '@mui/icons-material/UploadFile';
+ 
+ import { ACCEPTED_LIBRARY_FILES } from '../../../../utils/library-api';
++import COLLECTION_KINDS from './collection-kinds';
+ import { createUploadSelection } from './upload-selection';
+ 
+ const actionButtonSx = {
+@@ -31,7 +31,7 @@ const actionButtonSx = {
+ };
+ 
+ const LibraryActions = ({
+-  isPlaylists,
++  collectionKind,
+   isSelecting,
+   selectedCount,
+   onCancelSelection,
+@@ -41,6 +41,8 @@ const LibraryActions = ({
+   onUploadSelected,
+ }) => {
+   const { t } = useTranslation();
++  const collection = COLLECTION_KINDS[collectionKind];
++  const CreateIcon = collection?.icon;
+   const [uploadMenuAnchor, setUploadMenuAnchor] = useState(null);
+   const fileInput = useRef(null);
+   const folderInput = useRef(null);
+@@ -102,7 +104,7 @@ const LibraryActions = ({
+             </Button>
+           </>
+         : <>
+-            {!isPlaylists &&
++            {!collection &&
+               <>
+                 <Button
+                   aria-controls={uploadMenuAnchor ? 'library-upload-menu' : undefined}
+@@ -152,11 +154,11 @@ const LibraryActions = ({
+             }
+             <Button
+               onClick={onCreateFolder}
+-              startIcon={isPlaylists ? <PlaylistAddIcon /> : <CreateNewFolderIcon />}
++              startIcon={CreateIcon ? <CreateIcon /> : <CreateNewFolderIcon />}
+               sx={actionButtonSx}
+               variant="outlined"
+             >
+-              {t(isPlaylists ? 'library.folders.manager.create-playlist' : 'library.folders.manager.create-folder')}
++              {t(collection?.createLabelKey || 'library.folders.manager.create-folder')}
+             </Button>
+             <Button
+               onClick={onStartSelection}
+diff --git a/src/components/Library/lists/folders/create-folder-dialog.jsx b/src/components/Library/lists/folders/create-folder-dialog.jsx
+index 44f399e..bb22c57 100644
+--- a/src/components/Library/lists/folders/create-folder-dialog.jsx
++++ b/src/components/Library/lists/folders/create-folder-dialog.jsx
+@@ -16,15 +16,17 @@ import {
+   translateLibraryError,
+   uploadLibraryFile,
+ } from '../../../../utils/library-api';
++import COLLECTION_KINDS from './collection-kinds';
+ 
+ const CreateFolderDialog = ({
++  collectionKind,
+   folder,
+-  isPlaylist,
+   onClose,
+   onCreated,
+   open,
+ }) => {
+   const { t } = useTranslation();
++  const collection = COLLECTION_KINDS[collectionKind];
+   const [name, setName] = useState('');
+   const [error, setError] = useState('');
+   const [isSaving, setIsSaving] = useState(false);
+@@ -49,16 +51,16 @@ const CreateFolderDialog = ({
+       setName('');
+       created = true;
+ 
+-      if (isPlaylist) {
++      if (collection) {
+         try {
+           await uploadLibraryFile({
+             folder: path,
+-            file: new File([], `${trimmedName}.m3u`, { type: 'audio/x-mpegurl' }),
++            file: new File([], collection.seedFileName(trimmedName), { type: collection.seedFileType }),
+           });
+         }
+         catch {
+-          // The playlist folder was created either way; the empty .m3u is a nice-to-have
+-          // so it opens straight into the playlist view - not worth failing the dialog over.
++          // The folder was created either way; the empty marker file is a nice-to-have
++          // so it opens straight into the collection's view - not worth failing the dialog over.
+         }
+       }
+     }
+@@ -75,7 +77,7 @@ const CreateFolderDialog = ({
+     <Dialog fullWidth maxWidth="xs" onClose={close} open={open}>
+       <form onSubmit={createFolder}>
+         <DialogTitle>
+-          {t(isPlaylist ? 'library.folders.manager.create-playlist-dialog.title' : 'library.folders.manager.create.title')}
++          {t(collection?.createDialogTitleKey || 'library.folders.manager.create.title')}
+         </DialogTitle>
+         <DialogContent>
+           {error && <Alert severity="error" sx={{ marginBottom: 2 }}>{error}</Alert>}
+@@ -83,7 +85,7 @@ const CreateFolderDialog = ({
+             autoFocus
+             disabled={isSaving}
+             fullWidth
+-            label={t(isPlaylist ? 'library.folders.manager.create-playlist-dialog.name' : 'library.folders.manager.create.name')}
++            label={t(collection?.createDialogNameKey || 'library.folders.manager.create.name')}
+             margin="dense"
+             onChange={(event) => setName(event.target.value)}
+             required
+diff --git a/src/components/Library/lists/folders/collection-kinds.js b/src/components/Library/lists/folders/collection-kinds.js
+new file mode 100644
+--- /dev/null
++++ b/src/components/Library/lists/folders/collection-kinds.js
+@@ -0,0 +1,22 @@
++import QueueMusicIcon from '@mui/icons-material/QueueMusic';
++
++// A "collection" is a library view where browsing into a folder that contains a
++// special marker file (m3u, podcast.txt, livestream.txt, ...) shows the marker's
++// resolved contents instead of a raw file listing - the same expansion the backend
++// already does for card playback (see playlistgenerator.py). Each entry here is one
++// such marker type, keyed by its view id (e.g. the "playlists" library tab).
++const COLLECTION_KINDS = {
++  playlist: {
++    markerType: 'playlist',
++    icon: QueueMusicIcon,
++    createLabelKey: 'library.folders.manager.create-playlist',
++    createDialogTitleKey: 'library.folders.manager.create-playlist-dialog.title',
++    createDialogNameKey: 'library.folders.manager.create-playlist-dialog.name',
++    bannerKey: 'library.folders.playlist-banner',
++    emptyKey: 'library.folders.empty-playlist',
++    seedFileName: (name) => `${name}.m3u`,
++    seedFileType: 'audio/x-mpegurl',
++  },
++};
++
++export default COLLECTION_KINDS;
