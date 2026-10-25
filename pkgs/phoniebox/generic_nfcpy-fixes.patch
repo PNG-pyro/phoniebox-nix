@@ -856,6 +856,104 @@ index 3191c36..cae4fab 100644
  };
  
  export default SelectedFolder;
+diff --git a/src/webapp/src/components/Cards/controls/actions/play-music/selected-single.js b/src/webapp/src/components/Cards/controls/actions/play-music/selected-single.js
+index a7280c1..237d553 100644
+--- a/src/webapp/src/components/Cards/controls/actions/play-music/selected-single.js
++++ b/src/webapp/src/components/Cards/controls/actions/play-music/selected-single.js
+@@ -1,7 +1,17 @@
+ import React, { useEffect, useState } from 'react';
+ import { useTranslation } from 'react-i18next';
+ 
+-import { CircularProgress, Grid, List, Typography } from '@mui/material';
++import {
++  Avatar,
++  CircularProgress,
++  Grid,
++  List,
++  ListItem,
++  ListItemAvatar,
++  ListItemText,
++  Typography,
++} from '@mui/material';
++import RadioIcon from '@mui/icons-material/Radio';
+ 
+ import SongListItem from '../../../../Library/lists/albums/song-list/song-list-item'
+ import NoMusicSelected from './no-music-selected';
+@@ -10,24 +20,31 @@ import request from '../../../../../utils/request';
+ 
+ const SelectecSingle = ({ values: [song_url] }) => {
+   const { t } = useTranslation();
+-  const [song, setSong] = useState({});
++  const [song, setSong] = useState(null);
+   const [error, setError] = useState(null);
+   const [isLoading, setIsLoading] = useState(true);
+ 
++  // Streams and podcast episodes are URLs: there's nothing to look up in the library
++  const isUrl = typeof song_url === 'string' && song_url.includes('://');
++
+   useEffect(() => {
++    if (!song_url || isUrl) {
++      setIsLoading(false);
++      return;
++    }
++
+     const getSongList = async () => {
+       setIsLoading(true);
+       const { result, error } = await request('getSongByUrl', { song_url });
+       setIsLoading(false);
+ 
+-      if(result) {
+-        setSong(result[0]);
+-      }
+-      if(error) setError(error);
++      // An empty result means the file isn't in the library (anymore)
++      if (result) setSong(result[0] || null);
++      if (error) setError(error);
+     }
+ 
+     getSongList();
+-  }, [song_url]);
++  }, [song_url, isUrl]);
+ 
+   if (error) {
+     return (
+@@ -52,15 +69,33 @@ const SelectecSingle = ({ values: [song_url] }) => {
+     );
+   }
+ 
+-  if (song_url) {
++  if (!song_url) return <NoMusicSelected />;
++
++  // A stream, or a file the library doesn't know: show its address instead of song details
++  if (isUrl || !song) {
+     return (
+       <List sx={{ width: '100%' }}>
+-        <SongListItem song={song} />
++        <ListItem>
++          {isUrl &&
++            <ListItemAvatar>
++              <Avatar><RadioIcon /></Avatar>
++            </ListItemAvatar>
++          }
++          <ListItemText
++            primary={song_url}
++            secondary={isUrl ? 'Stream' : 'Not found in the library'}
++            primaryTypographyProps={{ sx: { wordBreak: 'break-all' } }}
++          />
++        </ListItem>
+       </List>
+     );
+   }
+ 
+-  return <NoMusicSelected />
++  return (
++    <List sx={{ width: '100%' }}>
++      <SongListItem song={song} showAddButton={false} />
++    </List>
++  );
+ };
+ 
+ export default SelectecSingle;
 diff --git a/src/webapp/src/components/Library/add-to-playlist-dialog.js b/src/webapp/src/components/Library/add-to-playlist-dialog.js
 new file mode 100644
 index 0000000..95b028c
@@ -1372,10 +1470,10 @@ index b239181..aa41d48 100644
      </Grid>
    );
 diff --git a/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js b/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js
-index 0f22d2d..d8ae790 100644
+index 0f22d2d..0d06496 100644
 --- a/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js
 +++ b/src/webapp/src/components/Library/lists/albums/song-list/song-list-item.js
-@@ -1,14 +1,17 @@
+@@ -1,21 +1,26 @@
 -import React from 'react';
 +import React, { useState } from 'react';
  import { useTranslation } from 'react-i18next';
@@ -1394,15 +1492,16 @@ index 0f22d2d..d8ae790 100644
  
  const SongListItem = ({
    isSelecting,
-@@ -16,6 +19,7 @@ const SongListItem = ({
+   registerMusicToCard,
    song,
++  showAddButton = true,
  }) => {
    const { t } = useTranslation();
 +  const [dialogOpen, setDialogOpen] = useState(false);
  
    const command = 'play_single';
    const {
-@@ -34,17 +38,37 @@ const SongListItem = ({
+@@ -34,17 +39,37 @@ const SongListItem = ({
    );
  
    return (
@@ -1414,7 +1513,7 @@ index 0f22d2d..d8ae790 100644
 +      <ListItem
 +        disablePadding
 +        secondaryAction={
-+          isSelecting
++          isSelecting || !showAddButton
 +            ? undefined
 +            : <IconButton
 +                edge="end"
