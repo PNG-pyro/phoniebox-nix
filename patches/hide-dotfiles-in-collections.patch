@@ -1,0 +1,13 @@
+diff --git a/src/jukebox/jukebox/playlistgenerator.py b/src/jukebox/jukebox/playlistgenerator.py
+index 3fbdc16..86452e1 100755
+--- a/src/jukebox/jukebox/playlistgenerator.py
++++ b/src/jukebox/jukebox/playlistgenerator.py
+@@ -241,7 +241,7 @@ class PlaylistCollector:
+             )
+         )
+         for f in os.scandir(self._folder):
+-            if f.is_dir(follow_symlinks=True):
++            if f.is_dir(follow_symlinks=True) and not f.name.startswith('.'):
+                 dirs.append(f)
+             if self._is_valid(f):
+                 files.append(f)

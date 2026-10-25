@@ -36,6 +36,8 @@ let
       ../../patches/reader.patch
       ../../patches/playlists-view-daemon.patch
       ../../patches/podcasts-view-daemon.patch
+      ../../patches/hide-dotfiles-in-collections.patch
+      ../../patches/radio-view-daemon.patch
     ];
   };
 

@@ -1,0 +1,150 @@
+diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
+index 792776a..fdf00d6 100644
+--- a/src/components/Library/lists/index.jsx
++++ b/src/components/Library/lists/index.jsx
+@@ -54,6 +54,13 @@ const LOCAL_SOURCE = {
+       content_types: [],
+       root_dir: 'Podcasts',
+     },
++    {
++      id: 'radio',
++      label: 'Radio',
++      kind: 'folders',
++      content_types: [],
++      root_dir: 'Radio',
++    },
+   ],
+ };
+ 
+@@ -61,6 +68,7 @@ const LOCAL_SOURCE = {
+ const VIEW_COLLECTION_KIND = {
+   playlists: 'playlist',
+   podcasts: 'podcast',
++  radio: 'radio',
+ };
+ 
+ const RedirectWithSearch = ({ to }) => {
+diff --git a/src/components/Library/lists/folders/collection-kinds.js b/src/components/Library/lists/folders/collection-kinds.js
+index 1c0ad81..9d760a2 100644
+--- a/src/components/Library/lists/folders/collection-kinds.js
++++ b/src/components/Library/lists/folders/collection-kinds.js
+@@ -1,5 +1,6 @@
+ import PodcastsIcon from '@mui/icons-material/Podcasts';
+ import QueueMusicIcon from '@mui/icons-material/QueueMusic';
++import RadioIcon from '@mui/icons-material/Radio';
+ 
+ // A "collection" is a library view where browsing into a folder that contains a
+ // special marker file (m3u, podcast.txt, livestream.txt, ...) shows the marker's
+@@ -30,6 +31,18 @@ const COLLECTION_KINDS = {
+     seedFileName: () => 'podcast.txt',
+     seedFileType: 'text/plain',
+   },
++  radio: {
++    markerType: 'stream',
++    icon: RadioIcon,
++    createLabelKey: 'library.folders.manager.create-radio',
++    createDialogTitleKey: 'library.folders.manager.create-radio-dialog.title',
++    createDialogNameKey: 'library.folders.manager.create-radio-dialog.name',
++    bannerKey: 'library.folders.radio-banner',
++    emptyKey: 'library.folders.empty-radio',
++    // The backend matches this exact filename (livestream.txt), not a name-derived one.
++    seedFileName: () => 'livestream.txt',
++    seedFileType: 'text/plain',
++  },
+ };
+ 
+ export default COLLECTION_KINDS;
+diff --git a/public/locales/en/translation.json b/public/locales/en/translation.json
+index bb1624b..2c1070a 100644
+--- a/public/locales/en/translation.json
++++ b/public/locales/en/translation.json
+@@ -139,6 +139,7 @@
+       "folders": "Folders",
+       "playlists": "Playlists",
+       "podcasts": "Podcasts",
++      "radio": "Radio",
+       "tracks": "Tracks"
+     },
+     "sources": {
+@@ -156,12 +157,15 @@
+       "empty-folder": "This folder is empty! 🙈",
+       "empty-playlist": "This playlist is empty! 🙈",
+       "empty-podcast": "This podcast has no episodes yet! 🙈",
++      "empty-radio": "This radio collection has no stations yet! 🙈",
+       "show-folder-content": "Show folder content",
+       "back-button-label": "Back",
+       "playlist-banner_one": "Playlist: {{name}} ({{count}} track)",
+       "playlist-banner_other": "Playlist: {{name}} ({{count}} tracks)",
+       "podcast-banner_one": "Podcast: {{name}} ({{count}} episode)",
+       "podcast-banner_other": "Podcast: {{name}} ({{count}} episodes)",
++      "radio-banner_one": "Radio: {{name}} ({{count}} station)",
++      "radio-banner_other": "Radio: {{name}} ({{count}} stations)",
+       "manager": {
+         "actions-label": "Library file actions",
+         "upload": "Upload",
+@@ -170,6 +174,7 @@
+         "create-folder": "New folder",
+         "create-playlist": "New playlist",
+         "create-podcast": "New podcast",
++        "create-radio": "New radio station",
+         "select": "Select",
+         "select-item": "Select {{name}}",
+         "delete-selected_one": "Delete {{count}} item",
+@@ -189,6 +194,10 @@
+           "title": "Create podcast",
+           "name": "Podcast name"
+         },
++        "create-radio-dialog": {
++          "title": "Create radio station",
++          "name": "Station name"
++        },
+         "delete": {
+           "title_one": "Delete {{count}} item?",
+           "title_other": "Delete {{count}} items?",
+diff --git a/public/locales/de/translation.json b/public/locales/de/translation.json
+index 8bc5f38..34cac6d 100644
+--- a/public/locales/de/translation.json
++++ b/public/locales/de/translation.json
+@@ -139,6 +139,7 @@
+       "folders": "Ordner",
+       "playlists": "Playlists",
+       "podcasts": "Podcasts",
++      "radio": "Radio",
+       "tracks": "Titel"
+     },
+     "sources": {
+@@ -156,12 +157,15 @@
+       "empty-folder": "Dieser Ordner ist leer! 🙈",
+       "empty-playlist": "Diese Playlist ist leer! 🙈",
+       "empty-podcast": "Dieser Podcast hat noch keine Folgen! 🙈",
++      "empty-radio": "Diese Radio-Sammlung hat noch keine Sender! 🙈",
+       "show-folder-content": "Zeige den Ordnerinhalt an",
+       "back-button-label": "Zurück",
+       "playlist-banner_one": "Playlist: {{name}} ({{count}} Titel)",
+       "playlist-banner_other": "Playlist: {{name}} ({{count}} Titel)",
+       "podcast-banner_one": "Podcast: {{name}} ({{count}} Folge)",
+       "podcast-banner_other": "Podcast: {{name}} ({{count}} Folgen)",
++      "radio-banner_one": "Radio: {{name}} ({{count}} Sender)",
++      "radio-banner_other": "Radio: {{name}} ({{count}} Sender)",
+       "manager": {
+         "actions-label": "Aktionen für Bibliotheksdateien",
+         "upload": "Hochladen",
+@@ -170,6 +174,7 @@
+         "create-folder": "Neuer Ordner",
+         "create-playlist": "Neue Playlist",
+         "create-podcast": "Neuer Podcast",
++        "create-radio": "Neuer Radiosender",
+         "select": "Auswählen",
+         "select-item": "{{name}} auswählen",
+         "delete-selected_one": "{{count}} Element löschen",
+@@ -189,6 +194,10 @@
+           "title": "Podcast erstellen",
+           "name": "Podcastname"
+         },
++        "create-radio-dialog": {
++          "title": "Radiosender erstellen",
++          "name": "Sendername"
++        },
+         "delete": {
+           "title_one": "{{count}} Element löschen?",
+           "title_other": "{{count}} Elemente löschen?",

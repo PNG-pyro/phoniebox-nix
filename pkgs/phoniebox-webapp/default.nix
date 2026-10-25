@@ -28,6 +28,7 @@ buildNpmPackage {
     ../../patches/playlist-icons-and-empty-message.patch
     ../../patches/collection-kind-refactor.patch
     ../../patches/podcasts-collection-support.patch
+    ../../patches/radio-collection-support.patch
   ];
 
   env = {
