@@ -1,0 +1,36 @@
+diff --git a/src/components/Library/lists/folders/create-folder-dialog.jsx b/src/components/Library/lists/folders/create-folder-dialog.jsx
+index 7cf4a53..44f399e 100644
+--- a/src/components/Library/lists/folders/create-folder-dialog.jsx
++++ b/src/components/Library/lists/folders/create-folder-dialog.jsx
+@@ -14,6 +14,7 @@ import {
+ import {
+   createLibraryFolder,
+   translateLibraryError,
++  uploadLibraryFile,
+ } from '../../../../utils/library-api';
+ 
+ const CreateFolderDialog = ({
+@@ -44,9 +45,22 @@ const CreateFolderDialog = ({
+     setIsSaving(true);
+     let created = false;
+     try {
+-      await createLibraryFolder(folder, trimmedName);
++      const { path } = await createLibraryFolder(folder, trimmedName);
+       setName('');
+       created = true;
++
++      if (isPlaylist) {
++        try {
++          await uploadLibraryFile({
++            folder: path,
++            file: new File([], `${trimmedName}.m3u`, { type: 'audio/x-mpegurl' }),
++          });
++        }
++        catch {
++          // The playlist folder was created either way; the empty .m3u is a nice-to-have
++          // so it opens straight into the playlist view - not worth failing the dialog over.
++        }
++      }
+     }
+     catch (requestError) {
+       setError(translateLibraryError(t, requestError));

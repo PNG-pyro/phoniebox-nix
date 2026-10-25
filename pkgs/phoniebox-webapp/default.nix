@@ -24,6 +24,7 @@ buildNpmPackage {
     ../../patches/playlist-root-boundary.patch
     ../../patches/playlist-actions.patch
     ../../patches/playlist-expanded-view.patch
+    ../../patches/playlist-create-m3u.patch
   ];
 
   env = {
