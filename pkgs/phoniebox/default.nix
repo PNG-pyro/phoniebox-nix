@@ -12,7 +12,7 @@
 
 let
 
-  rev = "4fa84fd50750fd4b52984d51aa7c95466cf5b241"; # your existing pin
+  rev = "0d9d70fdf44a53c42ff3617d14ae7e5d1fdba9ac"; # your existing pin
   upstreamVersion = "3.6.0";
 
   zeromqDrafts = zeromq.override { enableDrafts = true; };
@@ -32,19 +32,14 @@ let
       inherit rev;
       hash = "sha256-mRTTY/R4Bh9zlsejxJjNt/bgdS3YiySUFg7f2Z6gKuM=";
     };
-    patches = [ ./generic_nfcpy-fixes.patch ]; # or whatever you've renamed it to
+    patches = [ ]; # or whatever you've renamed it to
   };
 
   py = python3.withPackages (
     p:
     with p;
     [
-      ((pyzmq.override { zeromq = zeromqDrafts; }).overridePythonAttrs (old: {
-        env = (old.env or { }) // {
-          ZMQ_DRAFT_API = "1";
-        };
-        doCheck = false;
-      }))
+      pyzmq
       evdev
       mutagen
       pyalsaaudio

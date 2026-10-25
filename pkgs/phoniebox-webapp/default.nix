@@ -2,6 +2,7 @@
   buildNpmPackage,
   nodejs_22,
   phoniebox,
+  lib,
 }:
 
 buildNpmPackage {
@@ -12,17 +13,22 @@ buildNpmPackage {
   src = "${phoniebox.src}/src/webapp";
   nodejs = nodejs_22;
 
-  npmDepsHash = "sha256-cTlTT7WeQwLxFl+rL7vheUB4hqR4CwaAsyfLaPfrOLI="; # first build prints the real one
+  npmDepsHash = lib.fakeHash; # first build prints the real one
 
   # Web app patches go here later (paths relative to src/webapp)
   patches = [ ];
 
   env = {
-    CI = "false"; # don't treat lint warnings as errors
-    GENERATE_SOURCEMAP = "false"; # smaller output
-    DISABLE_ESLINT_PLUGIN = "true"; # faster build
     NODE_OPTIONS = "--max-old-space-size=4096";
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
   };
+
+  # env = {
+  #   CI = "false"; # don't treat lint warnings as errors
+  #   GENERATE_SOURCEMAP = "false"; # smaller output
+  #   DISABLE_ESLINT_PLUGIN = "true"; # faster build
+  #   NODE_OPTIONS = "--max-old-space-size=4096";
+  # };
 
   # The build produces a static site; install just that
   installPhase = ''
