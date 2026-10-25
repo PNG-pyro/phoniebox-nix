@@ -66,7 +66,7 @@ let
       e2dsa
 
     [/music]
-      ${S}/shared/audiofolders
+      ${S}/shared/audiofolders/Music
       accs:
         rwmd: *
   '';
@@ -506,6 +506,7 @@ in
             mkdir -p ${S}/src/jukebox ${S}/mpd ${S}/shared/{settings,audiofolders,playlists,cover-cache,logs}
 
             mkdir -p ${S}/shared/audiofolders/Playlists
+            mkdir -p ${S}/shared/audiofolders/Music
 
             # refreshed every start: these point into the store
             ln -sfn ${share}/resources ${S}/resources

@@ -2215,7 +2215,7 @@ index 0000000..7f3e78c
 +
 +export default PlaylistBanner;
 diff --git a/src/webapp/src/components/Library/lists/index.js b/src/webapp/src/components/Library/lists/index.js
-index e2b7a2d..5060b5e 100644
+index e2b7a2d..b1b1869 100644
 --- a/src/webapp/src/components/Library/lists/index.js
 +++ b/src/webapp/src/components/Library/lists/index.js
 @@ -9,6 +9,7 @@ import {
@@ -2271,6 +2271,15 @@ index e2b7a2d..5060b5e 100644
                exact
              />
              <Route
+@@ -78,7 +96,7 @@ const LibraryLists = () => {
+             />
+             <Route
+               path="folders"
+-              element={<Navigate to={`.%2F${urlSearch}`} replace />}
++              element={<Navigate to={`Music${urlSearch}`} replace />}
+             />
+             <Route
+               path="folders/:dir"
 @@ -90,6 +108,21 @@ const LibraryLists = () => {
                  />
                }
@@ -2294,7 +2303,7 @@ index e2b7a2d..5060b5e 100644
          </Grid>
        </Grid>
 diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
-index 3727b94..b62d22b 100644
+index 3727b94..391fbb3 100644
 --- a/src/webapp/src/components/Navigation/index.js
 +++ b/src/webapp/src/components/Navigation/index.js
 @@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
@@ -2341,7 +2350,7 @@ index 3727b94..b62d22b 100644
        />
 +      <BottomNavigationAction
 +        component="a"
-+        href="/upload/"
++        href="/upload/#v=up2k"
 +        target="_blank"
 +        rel="noopener"
 +        label="Upload"
