@@ -186,7 +186,7 @@ index a26152e..9eba8d0 100644
 +def get_wifi_connect_state():
 +    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..83a0e8f 100644
+index 86dbc60..caa7cea 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
 @@ -87,6 +87,7 @@ import threading
@@ -485,7 +485,7 @@ index 86dbc60..83a0e8f 100644
      @plugs.tag
      def get_single_coverart(self, song_url):
          mp3_file_path = Path(components.player.get_music_library_path(), song_url).expanduser()
-@@ -609,7 +863,51 @@ class PlayerMPD:
+@@ -609,7 +863,54 @@ class PlayerMPD:
          """
          plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
          plc.get_directory_content(folder)
@@ -497,8 +497,11 @@ index 86dbc60..83a0e8f 100644
 +            # Never let the check break the listing itself
 +            logger.warning(f"Couldn't check which entries in '{folder}' are playable: {e}")
 +
-+        # Hide hidden files and folders (e.g. copyparty's .hist)
-+        entries = [entry for entry in entries if not entry.get('name', '').startswith('.')]
++        # Hide hidden files and folders (e.g. copyparty's .hist), judged by the last
++        # part of the name, so playlist entries like ../../Music/song.mp3 still show
++        entries = [entry for entry in entries
++                   if not os.path.basename(entry.get('name', '').rstrip('/')).startswith('.')]
++
 +        return entries
 +
 +    def _mark_playable(self, folder, entries):
@@ -538,7 +541,7 @@ index 86dbc60..83a0e8f 100644
  
      @plugs.tag
      def play_folder(self, folder: str, recursive: bool = False) -> None:
-@@ -629,17 +927,29 @@ class PlayerMPD:
+@@ -629,17 +930,29 @@ class PlayerMPD:
  
              plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
              plc.parse(folder, recursive)
@@ -571,7 +574,7 @@ index 86dbc60..83a0e8f 100644
              self.current_folder_status = self.music_player_status['audio_folder_status'].get(folder)
              if self.current_folder_status is None:
                  self.current_folder_status = self.music_player_status['audio_folder_status'][folder] = {}
-@@ -662,6 +972,8 @@ class PlayerMPD:
+@@ -662,6 +975,8 @@ class PlayerMPD:
              self.mpd_client.clear()
              self.mpd_retry_with_mutex(self.mpd_client.findadd, 'albumartist', albumartist, 'album', album)
              self.mpd_client.play()
@@ -2216,7 +2219,7 @@ index 0000000..7f3e78c
 +
 +export default PlaylistBanner;
 diff --git a/src/webapp/src/components/Library/lists/index.js b/src/webapp/src/components/Library/lists/index.js
-index e2b7a2d..b1b1869 100644
+index e2b7a2d..d945899 100644
 --- a/src/webapp/src/components/Library/lists/index.js
 +++ b/src/webapp/src/components/Library/lists/index.js
 @@ -9,6 +9,7 @@ import {
@@ -2281,10 +2284,14 @@ index e2b7a2d..b1b1869 100644
              />
              <Route
                path="folders/:dir"
-@@ -90,6 +108,21 @@ const LibraryLists = () => {
-                 />
-               }
-             />
+@@ -87,6 +105,22 @@ const LibraryLists = () => {
+                   musicFilter={musicFilter}
+                   isSelecting={isSelecting}
+                   registerMusicToCard={registerMusicToCard}
++                  topDir="Music"
++                />
++              }
++            />
 +           <Route
 +              path="playlists"
 +              element={<Navigate to={`Playlists${urlSearch}`} replace />}
@@ -2297,12 +2304,9 @@ index e2b7a2d..b1b1869 100644
 +                  isSelecting={isSelecting}
 +                  registerMusicToCard={registerMusicToCard}
 +                  topDir="Playlists"
-+                />
-+              }
-+            />
-           </Routes>
-         </Grid>
-       </Grid>
+                 />
+               }
+             />
 diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
 index 3727b94..391fbb3 100644
 --- a/src/webapp/src/components/Navigation/index.js
