@@ -29,6 +29,7 @@ buildNpmPackage {
     ../../patches/collection-kind-refactor.patch
     ../../patches/podcasts-collection-support.patch
     ../../patches/radio-collection-support.patch
+    ../../patches/compact-view-tabs.patch
   ];
 
   env = {

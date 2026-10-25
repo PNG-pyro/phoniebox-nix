@@ -1,0 +1,93 @@
+diff --git a/src/components/Library/library-header.jsx b/src/components/Library/library-header.jsx
+index 3f107de..57ff3a9 100644
+--- a/src/components/Library/library-header.jsx
++++ b/src/components/Library/library-header.jsx
+@@ -14,8 +14,24 @@ import {
+   TextField,
+ } from "@mui/material";
+ 
++import AlbumIcon from '@mui/icons-material/Album';
++import FolderIcon from '@mui/icons-material/Folder';
+ import SearchIcon from '@mui/icons-material/Search';
+ 
++import VIEW_COLLECTION_KIND from './lists/view-collection-kind';
++import COLLECTION_KINDS from './lists/folders/collection-kinds';
++
++// Non-collection views (plain library browsing) get their own fixed icon;
++// collection views (playlists, podcasts, radio, ...) use their kind's icon.
++const VIEW_ICONS = {
++  albums: AlbumIcon,
++  folders: FolderIcon,
++};
++
++const getViewIcon = (viewId) => (
++  VIEW_ICONS[viewId] || COLLECTION_KINDS[VIEW_COLLECTION_KIND[viewId]]?.icon
++);
++
+ const LibraryHeader = ({ handleMusicFilter, musicFilter, sources }) => {
+   const { pathname, search: urlSearch } = useLocation();
+   const navigate = useNavigate();
+@@ -92,13 +108,17 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter, sources }) => {
+           variant="scrollable"
+           sx={{ borderBottom: 1, borderColor: 'divider', width: '100%' }}
+         >
+-          {source.views.map(({ id, label }) => (
+-            <Tab
+-              key={id}
+-              label={t(`library.header.${id}`, { defaultValue: label })}
+-              value={id}
+-            />
+-          ))}
++          {source.views.map(({ id, label }) => {
++            const Icon = getViewIcon(id);
++            return (
++              <Tab
++                icon={Icon && <Icon fontSize="small" />}
++                key={id}
++                label={activeView === id ? t(`library.header.${id}`, { defaultValue: label }) : undefined}
++                value={id}
++              />
++            );
++          })}
+         </Tabs>
+       }
+       {showSearchInput &&
+diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
+index fdf00d6..3b48c7d 100644
+--- a/src/components/Library/lists/index.jsx
++++ b/src/components/Library/lists/index.jsx
+@@ -23,6 +23,7 @@ import SelectorHeader from "../selector-header";
+ import { buildActionData } from '../../Cards/utils';
+ import request from '../../../utils/request';
+ import { ROOT_DIR } from '../../../config';
++import VIEW_COLLECTION_KIND from './view-collection-kind';
+ 
+ const LOCAL_SOURCE = {
+   id: 'mpd',
+@@ -64,13 +65,6 @@ const LOCAL_SOURCE = {
+   ],
+ };
+ 
+-// Maps a library view id to the collection kind (see collection-kinds.js) it browses.
+-const VIEW_COLLECTION_KIND = {
+-  playlists: 'playlist',
+-  podcasts: 'podcast',
+-  radio: 'radio',
+-};
+-
+ const RedirectWithSearch = ({ to }) => {
+   const [searchParams] = useSearchParams();
+   const search = searchParams.toString();
+diff --git a/src/components/Library/lists/view-collection-kind.js b/src/components/Library/lists/view-collection-kind.js
+new file mode 100644
+--- /dev/null
++++ b/src/components/Library/lists/view-collection-kind.js
+@@ -0,0 +1,8 @@
++// Maps a library view id to the collection kind (see folders/collection-kinds.js) it browses.
++const VIEW_COLLECTION_KIND = {
++  playlists: 'playlist',
++  podcasts: 'podcast',
++  radio: 'radio',
++};
++
++export default VIEW_COLLECTION_KIND;
