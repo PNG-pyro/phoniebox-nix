@@ -186,7 +186,7 @@ index a26152e..9eba8d0 100644
 +def get_wifi_connect_state():
 +    return dict(_wifi_connect_state)
 diff --git a/src/jukebox/components/playermpd/__init__.py b/src/jukebox/components/playermpd/__init__.py
-index 86dbc60..95cd31b 100644
+index 86dbc60..83a0e8f 100644
 --- a/src/jukebox/components/playermpd/__init__.py
 +++ b/src/jukebox/components/playermpd/__init__.py
 @@ -87,6 +87,7 @@ import threading
@@ -485,7 +485,7 @@ index 86dbc60..95cd31b 100644
      @plugs.tag
      def get_single_coverart(self, song_url):
          mp3_file_path = Path(components.player.get_music_library_path(), song_url).expanduser()
-@@ -609,7 +863,50 @@ class PlayerMPD:
+@@ -609,7 +863,51 @@ class PlayerMPD:
          """
          plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
          plc.get_directory_content(folder)
@@ -496,8 +496,9 @@ index 86dbc60..95cd31b 100644
 +        except Exception as e:
 +            # Never let the check break the listing itself
 +            logger.warning(f"Couldn't check which entries in '{folder}' are playable: {e}")
-+            # Hide hidden files and folders (e.g. copyparty's .hist)
-+            entries = [e for e in entries if not e.get('name', '').startswith('.')]
++
++        # Hide hidden files and folders (e.g. copyparty's .hist)
++        entries = [entry for entry in entries if not entry.get('name', '').startswith('.')]
 +        return entries
 +
 +    def _mark_playable(self, folder, entries):
@@ -537,7 +538,7 @@ index 86dbc60..95cd31b 100644
  
      @plugs.tag
      def play_folder(self, folder: str, recursive: bool = False) -> None:
-@@ -629,17 +926,29 @@ class PlayerMPD:
+@@ -629,17 +927,29 @@ class PlayerMPD:
  
              plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
              plc.parse(folder, recursive)
@@ -570,7 +571,7 @@ index 86dbc60..95cd31b 100644
              self.current_folder_status = self.music_player_status['audio_folder_status'].get(folder)
              if self.current_folder_status is None:
                  self.current_folder_status = self.music_player_status['audio_folder_status'][folder] = {}
-@@ -662,6 +971,8 @@ class PlayerMPD:
+@@ -662,6 +972,8 @@ class PlayerMPD:
              self.mpd_client.clear()
              self.mpd_retry_with_mutex(self.mpd_client.findadd, 'albumartist', albumartist, 'album', album)
              self.mpd_client.play()
