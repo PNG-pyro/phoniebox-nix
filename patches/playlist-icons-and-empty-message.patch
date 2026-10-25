@@ -1,0 +1,107 @@
+diff --git a/src/components/Library/lists/folders/folder-list.jsx b/src/components/Library/lists/folders/folder-list.jsx
+index eaa51ad..50b8806 100644
+--- a/src/components/Library/lists/folders/folder-list.jsx
++++ b/src/components/Library/lists/folders/folder-list.jsx
+@@ -18,6 +18,8 @@ const FolderList = ({
+   dir,
+   folders,
+   isManagementSelecting,
++  isPlaylistFolder,
++  isPlaylists,
+   isSelecting,
+   onToggleSelected,
+   registerMusicToCard,
+@@ -45,7 +47,9 @@ const FolderList = ({
+         }
+         {folders.length === 0 &&
+           <ListItem sx={{ justifyContent: 'center' }}>
+-            <Typography>{t('library.folders.empty-folder')}</Typography>
++            <Typography>
++              {t(isPlaylistFolder ? 'library.folders.empty-playlist' : 'library.folders.empty-folder')}
++            </Typography>
+           </ListItem>
+         }
+         {folders.length > 0 && folders.map((folder, key) =>
+@@ -53,6 +57,7 @@ const FolderList = ({
+             key={folder.relpath || key}
+             folder={folder}
+             isManagementSelecting={isManagementSelecting}
++            isPlaylists={isPlaylists}
+             isSelecting={isSelecting}
+             isSelected={selectedPaths.has(folder.relpath)}
+             onToggleSelected={onToggleSelected}
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index f6d35ca..46be374 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -232,6 +232,8 @@ const Folders = ({
+           dir={dir}
+           folders={filteredFolders}
+           isManagementSelecting={isManagementSelecting}
++          isPlaylistFolder={isPlaylistFolder}
++          isPlaylists={isPlaylists}
+           isSelecting={isSelecting}
+           onToggleSelected={toggleSelected}
+           registerMusicToCard={registerMusicToCard}
+diff --git a/src/components/Library/lists/folders/folder-list-item.jsx b/src/components/Library/lists/folders/folder-list-item.jsx
+index c3bfe42..1804146 100644
+--- a/src/components/Library/lists/folders/folder-list-item.jsx
++++ b/src/components/Library/lists/folders/folder-list-item.jsx
+@@ -19,6 +19,7 @@ import FolderTypeAvatar from './folder-type-avatar';
+ const FolderListItem = ({
+   folder,
+   isManagementSelecting,
++  isPlaylists,
+   isSelecting,
+   isSelected,
+   onToggleSelected,
+@@ -92,7 +93,7 @@ const FolderListItem = ({
+             />
+           </ListItemIcon>
+         }
+-        <FolderTypeAvatar type={type} />
++        <FolderTypeAvatar isPlaylists={isPlaylists} type={type} />
+         <ListItemText
+           primary={name}
+           slotProps={{
+diff --git a/src/components/Library/lists/folders/folder-type-avatar.jsx b/src/components/Library/lists/folders/folder-type-avatar.jsx
+index 238515c..094e4ef 100644
+--- a/src/components/Library/lists/folders/folder-type-avatar.jsx
++++ b/src/components/Library/lists/folders/folder-type-avatar.jsx
+@@ -12,10 +12,10 @@ import PodcastsIcon from '@mui/icons-material/Podcasts';
+ import QueueMusicIcon from '@mui/icons-material/QueueMusic';
+ import RadioIcon from '@mui/icons-material/Radio';
+ 
+-const FolderTypeAvatar = ({ type }) => (
++const FolderTypeAvatar = ({ isPlaylists, type }) => (
+   <ListItemAvatar>
+     <Avatar>
+-      {type === 'directory' && <FolderIcon />}
++      {type === 'directory' && (isPlaylists ? <QueueMusicIcon /> : <FolderIcon />)}
+       {type === 'file' && <MusicNoteIcon />}
+       {type === 'image' && <ImageIcon />}
+       {type === 'playlist' && <QueueMusicIcon />}
+diff --git a/public/locales/en/translation.json b/public/locales/en/translation.json
+index d40dfe1..11e8bed 100644
+--- a/public/locales/en/translation.json
++++ b/public/locales/en/translation.json
+@@ -153,6 +153,7 @@
+     "folders": {
+       "no-music": "☝️ No music found!",
+       "empty-folder": "This folder is empty! 🙈",
++      "empty-playlist": "This playlist is empty! 🙈",
+       "show-folder-content": "Show folder content",
+       "back-button-label": "Back",
+       "playlist-banner_one": "Playlist: {{name}} ({{count}} track)",
+diff --git a/public/locales/de/translation.json b/public/locales/de/translation.json
+index 3644356..2214068 100644
+--- a/public/locales/de/translation.json
++++ b/public/locales/de/translation.json
+@@ -153,6 +153,7 @@
+     "folders": {
+       "no-music": "☝️ Keine Musik vorhanden!",
+       "empty-folder": "Dieser Ordner ist leer! 🙈",
++      "empty-playlist": "Diese Playlist ist leer! 🙈",
+       "show-folder-content": "Zeige den Ordnerinhalt an",
+       "back-button-label": "Zurück",
+       "playlist-banner_one": "Playlist: {{name}} ({{count}} Titel)",

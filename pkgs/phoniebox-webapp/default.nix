@@ -25,6 +25,7 @@ buildNpmPackage {
     ../../patches/playlist-actions.patch
     ../../patches/playlist-expanded-view.patch
     ../../patches/playlist-create-m3u.patch
+    ../../patches/playlist-icons-and-empty-message.patch
   ];
 
   env = {
