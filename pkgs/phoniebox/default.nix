@@ -30,7 +30,7 @@ let
       owner = "MiczFlor";
       repo = "RPi-Jukebox-RFID";
       inherit rev;
-      hash = lib.fakeHash;
+      hash = "sha256-KnXh5fiV3RzRRWvQoGTomm7DW1Qzxld0UrGxb4pHrlw=";
     };
     patches = [ ../../patches/reader.patch ]; # or whatever you've renamed it to
   };
