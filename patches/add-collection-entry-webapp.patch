@@ -1,0 +1,448 @@
+diff --git a/src/utils/library-api.js b/src/utils/library-api.js
+index 2496543..66eb499 100644
+--- a/src/utils/library-api.js
++++ b/src/utils/library-api.js
+@@ -72,6 +72,13 @@ const createLibraryFolder = (parent, name, options = {}) => jsonRequest('/folder
+   signal: options.signal,
+ });
+ 
++// Validates the URL (the backend fetches it) and appends it to the folder's
++// collection marker file (livestream.txt, podcast.txt, ...), creating it if needed.
++const addCollectionEntry = ({ folder, fileName, url }) => jsonRequest('/collection-entries', {
++  method: 'POST',
++  body: JSON.stringify({ folder, file_name: fileName, url }),
++});
++
+ const listLibraryEntries = async (folder) => {
+   const query = new URLSearchParams({ folder });
+   const data = await jsonRequest(`/entries?${query.toString()}`);
+@@ -153,6 +160,7 @@ const translateLibraryError = (t, error) => t(
+ export {
+   ACCEPTED_LIBRARY_FILES,
+   LibraryApiError,
++  addCollectionEntry,
+   createLibraryFolder,
+   deleteLibraryEntries,
+   listLibraryEntries,
+diff --git a/src/components/Library/lists/folders/collection-kinds.js b/src/components/Library/lists/folders/collection-kinds.js
+index 9d760a2..968acbd 100644
+--- a/src/components/Library/lists/folders/collection-kinds.js
++++ b/src/components/Library/lists/folders/collection-kinds.js
+@@ -30,6 +30,12 @@ const COLLECTION_KINDS = {
+     // The backend matches this exact filename (podcast.txt), not a name-derived one.
+     seedFileName: () => 'podcast.txt',
+     seedFileType: 'text/plain',
++    // A podcast needs a feed URL to be worth anything, so it's required up front,
++    // and more episodes/feeds can be appended later from an existing podcast folder.
++    requiresUrl: true,
++    urlLabelKey: 'library.folders.manager.create-podcast-dialog.url',
++    addButtonLabelKey: 'library.folders.manager.add-podcast-entry',
++    addDialogTitleKey: 'library.folders.manager.add-podcast-entry-dialog.title',
+   },
+   radio: {
+     markerType: 'stream',
+@@ -42,6 +48,10 @@ const COLLECTION_KINDS = {
+     // The backend matches this exact filename (livestream.txt), not a name-derived one.
+     seedFileName: () => 'livestream.txt',
+     seedFileType: 'text/plain',
++    requiresUrl: true,
++    urlLabelKey: 'library.folders.manager.create-radio-dialog.url',
++    addButtonLabelKey: 'library.folders.manager.add-radio-entry',
++    addDialogTitleKey: 'library.folders.manager.add-radio-entry-dialog.title',
+   },
+ };
+ 
+diff --git a/src/components/Library/lists/folders/create-folder-dialog.jsx b/src/components/Library/lists/folders/create-folder-dialog.jsx
+index bb22c57..0c5d62c 100644
+--- a/src/components/Library/lists/folders/create-folder-dialog.jsx
++++ b/src/components/Library/lists/folders/create-folder-dialog.jsx
+@@ -12,6 +12,7 @@ import {
+ } from '@mui/material';
+ 
+ import {
++  addCollectionEntry,
+   createLibraryFolder,
+   translateLibraryError,
+   uploadLibraryFile,
+@@ -28,30 +29,46 @@ const CreateFolderDialog = ({
+   const { t } = useTranslation();
+   const collection = COLLECTION_KINDS[collectionKind];
+   const [name, setName] = useState('');
++  const [url, setUrl] = useState('');
+   const [error, setError] = useState('');
+   const [isSaving, setIsSaving] = useState(false);
++  // Set once the folder itself exists, so a retry (e.g. after a bad URL) doesn't
++  // try to create it again and hit a duplicate-name error.
++  const [createdPath, setCreatedPath] = useState(null);
+ 
+   const close = () => {
+     if (isSaving) return;
+     setName('');
++    setUrl('');
+     setError('');
++    setCreatedPath(null);
+     onClose();
+   };
+ 
+   const createFolder = async (event) => {
+     event.preventDefault();
+     const trimmedName = name.trim();
++    const trimmedUrl = url.trim();
+     if (!trimmedName) return;
++    if (collection?.requiresUrl && !trimmedUrl) return;
+ 
+     setError('');
+     setIsSaving(true);
+-    let created = false;
+     try {
+-      const { path } = await createLibraryFolder(folder, trimmedName);
+-      setName('');
+-      created = true;
++      let path = createdPath;
++      if (!path) {
++        ({ path } = await createLibraryFolder(folder, trimmedName));
++        setCreatedPath(path);
++      }
+ 
+-      if (collection) {
++      if (collection?.requiresUrl) {
++        await addCollectionEntry({
++          folder: path,
++          fileName: collection.seedFileName(trimmedName),
++          url: trimmedUrl,
++        });
++      }
++      else if (collection) {
+         try {
+           await uploadLibraryFile({
+             folder: path,
+@@ -63,6 +80,11 @@ const CreateFolderDialog = ({
+           // so it opens straight into the collection's view - not worth failing the dialog over.
+         }
+       }
++
++      setName('');
++      setUrl('');
++      setCreatedPath(null);
++      onCreated();
+     }
+     catch (requestError) {
+       setError(translateLibraryError(t, requestError));
+@@ -70,7 +92,6 @@ const CreateFolderDialog = ({
+     finally {
+       setIsSaving(false);
+     }
+-    if (created) onCreated();
+   };
+ 
+   return (
+@@ -83,7 +104,7 @@ const CreateFolderDialog = ({
+           {error && <Alert severity="error" sx={{ marginBottom: 2 }}>{error}</Alert>}
+           <TextField
+             autoFocus
+-            disabled={isSaving}
++            disabled={isSaving || Boolean(createdPath)}
+             fullWidth
+             label={t(collection?.createDialogNameKey || 'library.folders.manager.create.name')}
+             margin="dense"
+@@ -94,13 +115,24 @@ const CreateFolderDialog = ({
+             }}
+             value={name}
+           />
++          {collection?.requiresUrl &&
++            <TextField
++              disabled={isSaving}
++              fullWidth
++              label={t(collection.urlLabelKey)}
++              margin="dense"
++              onChange={(event) => setUrl(event.target.value)}
++              required
++              value={url}
++            />
++          }
+         </DialogContent>
+         <DialogActions>
+           <Button disabled={isSaving} onClick={close} sx={{ minHeight: 44 }}>
+             {t('general.buttons.cancel')}
+           </Button>
+           <Button
+-            disabled={isSaving || !name.trim()}
++            disabled={isSaving || !name.trim() || (collection?.requiresUrl && !url.trim())}
+             sx={{ minHeight: 44 }}
+             type="submit"
+             variant="contained"
+diff --git a/src/components/Library/lists/folders/playlist-banner.jsx b/src/components/Library/lists/folders/playlist-banner.jsx
+index 224151d..69c3ca6 100644
+--- a/src/components/Library/lists/folders/playlist-banner.jsx
++++ b/src/components/Library/lists/folders/playlist-banner.jsx
+@@ -16,7 +16,6 @@ const PlaylistBanner = ({ collectionKind, count, name }) => {
+         alignItems: 'center',
+         display: 'flex',
+         gap: 1,
+-        marginBottom: 1,
+       }}
+     >
+       <Icon color="primary" />
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index 9bd51d4..b680a04 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -9,13 +9,16 @@ import { useTranslation } from 'react-i18next';
+ import {
+   Alert,
+   Box,
++  Button,
+   CircularProgress,
+   Typography,
+ } from "@mui/material";
++import AddIcon from '@mui/icons-material/Add';
+ 
+ import { listLibraryEntries } from '../../../../utils/library-api';
+ import request from '../../../../utils/request';
+ import useScrollMemory from '../../../../utils/use-scroll-memory';
++import AddEntryDialog from './add-entry-dialog';
+ import COLLECTION_KINDS from './collection-kinds';
+ import CreateFolderDialog from './create-folder-dialog';
+ import DeleteEntriesDialog from './delete-entries-dialog';
+@@ -48,6 +51,7 @@ const Folders = ({
+   const [isLoading, setIsLoading] = useState(true);
+   const [reloadNumber, setReloadNumber] = useState(0);
+   const [createDialogOpen, setCreateDialogOpen] = useState(false);
++  const [addEntryDialogOpen, setAddEntryDialogOpen] = useState(false);
+   const [deleteEntries, setDeleteEntries] = useState([]);
+   const [operationWarning, setOperationWarning] = useState('');
+   const [isManagementSelecting, setIsManagementSelecting] = useState(false);
+@@ -193,7 +197,19 @@ const Folders = ({
+     >
+       <div ref={scrollRef} />
+       {isCollectionFolder &&
+-        <PlaylistBanner collectionKind={collectionKind} count={collectionCount} name={collectionName} />
++        <Box sx={{ alignItems: 'center', display: 'flex', gap: 1, justifyContent: 'space-between', marginBottom: 1 }}>
++          <PlaylistBanner collectionKind={collectionKind} count={collectionCount} name={collectionName} />
++          {collection?.requiresUrl &&
++            <Button
++              onClick={() => setAddEntryDialogOpen(true)}
++              size="small"
++              startIcon={<AddIcon fontSize="small" />}
++              variant="outlined"
++            >
++              {t(collection.addButtonLabelKey)}
++            </Button>
++          }
++        </Box>
+       }
+       {!isSelecting && !isCollectionFolder &&
+         <LibraryActions
+@@ -249,6 +265,16 @@ const Folders = ({
+         onCreated={folderCreated}
+         open={createDialogOpen}
+       />
++      <AddEntryDialog
++        collectionKind={collectionKind}
++        folder={currentFolder}
++        onAdded={() => {
++          setAddEntryDialogOpen(false);
++          reloadFolder();
++        }}
++        onClose={() => setAddEntryDialogOpen(false)}
++        open={addEntryDialogOpen}
++      />
+       <DeleteEntriesDialog
+         entries={deleteEntries}
+         onClose={() => setDeleteEntries([])}
+diff --git a/public/locales/en/translation.json b/public/locales/en/translation.json
+index 2c1070a..aae77fd 100644
+--- a/public/locales/en/translation.json
++++ b/public/locales/en/translation.json
+@@ -175,6 +175,9 @@
+         "create-playlist": "New playlist",
+         "create-podcast": "New podcast",
+         "create-radio": "New radio station",
++        "add-podcast-entry": "Add feed",
++        "add-radio-entry": "Add station",
++        "add-entry-confirm": "Add",
+         "select": "Select",
+         "select-item": "Select {{name}}",
+         "delete-selected_one": "Delete {{count}} item",
+@@ -192,11 +195,19 @@
+         },
+         "create-podcast-dialog": {
+           "title": "Create podcast",
+-          "name": "Podcast name"
++          "name": "Podcast name",
++          "url": "Podcast feed URL"
+         },
+         "create-radio-dialog": {
+           "title": "Create radio station",
+-          "name": "Station name"
++          "name": "Station name",
++          "url": "Stream URL"
++        },
++        "add-podcast-entry-dialog": {
++          "title": "Add a feed to this podcast"
++        },
++        "add-radio-entry-dialog": {
++          "title": "Add a station to this collection"
+         },
+         "delete": {
+           "title_one": "Delete {{count}} item?",
+@@ -230,6 +241,8 @@
+           "invalid_file_name": "The file name is invalid.",
+           "invalid_folder_name": "The folder name is invalid.",
+           "invalid_path": "The selected path is outside the music library.",
++          "invalid_url": "That doesn't look like a valid web address.",
++          "url_unreachable": "Could not reach that URL. Double-check it and try again.",
+           "mpd_update_failed": "The files changed, but the MPD library could not be updated.",
+           "network_error": "The connection to the Phoniebox failed.",
+           "permission_denied": "The Phoniebox does not have permission for this operation.",
+diff --git a/public/locales/de/translation.json b/public/locales/de/translation.json
+index 34cac6d..220e010 100644
+--- a/public/locales/de/translation.json
++++ b/public/locales/de/translation.json
+@@ -175,6 +175,9 @@
+         "create-playlist": "Neue Playlist",
+         "create-podcast": "Neuer Podcast",
+         "create-radio": "Neuer Radiosender",
++        "add-podcast-entry": "Feed hinzufügen",
++        "add-radio-entry": "Sender hinzufügen",
++        "add-entry-confirm": "Hinzufügen",
+         "select": "Auswählen",
+         "select-item": "{{name}} auswählen",
+         "delete-selected_one": "{{count}} Element löschen",
+@@ -192,11 +195,19 @@
+         },
+         "create-podcast-dialog": {
+           "title": "Podcast erstellen",
+-          "name": "Podcastname"
++          "name": "Podcastname",
++          "url": "Podcast-Feed-URL"
+         },
+         "create-radio-dialog": {
+           "title": "Radiosender erstellen",
+-          "name": "Sendername"
++          "name": "Sendername",
++          "url": "Stream-URL"
++        },
++        "add-podcast-entry-dialog": {
++          "title": "Feed zu diesem Podcast hinzufügen"
++        },
++        "add-radio-entry-dialog": {
++          "title": "Sender zu dieser Sammlung hinzufügen"
+         },
+         "delete": {
+           "title_one": "{{count}} Element löschen?",
+@@ -230,6 +241,8 @@
+           "invalid_file_name": "Der Dateiname ist ungültig.",
+           "invalid_folder_name": "Der Ordnername ist ungültig.",
+           "invalid_path": "Der ausgewählte Pfad liegt außerhalb der Musikbibliothek.",
++          "invalid_url": "Das sieht nicht wie eine gültige Webadresse aus.",
++          "url_unreachable": "Diese URL konnte nicht erreicht werden. Bitte überprüfen und erneut versuchen.",
+           "mpd_update_failed": "Die Dateien wurden geändert, aber die MPD-Bibliothek konnte nicht aktualisiert werden.",
+           "network_error": "Die Verbindung zur Phoniebox ist fehlgeschlagen.",
+           "permission_denied": "Die Phoniebox hat keine Berechtigung für diesen Vorgang.",
+diff --git a/src/components/Library/lists/folders/add-entry-dialog.jsx b/src/components/Library/lists/folders/add-entry-dialog.jsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/Library/lists/folders/add-entry-dialog.jsx
+@@ -0,0 +1,101 @@
++import { useState } from 'react';
++import { useTranslation } from 'react-i18next';
++
++import {
++  Alert,
++  Button,
++  Dialog,
++  DialogActions,
++  DialogContent,
++  DialogTitle,
++  TextField,
++} from '@mui/material';
++
++import {
++  addCollectionEntry,
++  translateLibraryError,
++} from '../../../../utils/library-api';
++import COLLECTION_KINDS from './collection-kinds';
++
++const AddEntryDialog = ({
++  collectionKind,
++  folder,
++  onAdded,
++  onClose,
++  open,
++}) => {
++  const { t } = useTranslation();
++  const collection = COLLECTION_KINDS[collectionKind];
++  const [url, setUrl] = useState('');
++  const [error, setError] = useState('');
++  const [isSaving, setIsSaving] = useState(false);
++
++  const close = () => {
++    if (isSaving) return;
++    setUrl('');
++    setError('');
++    onClose();
++  };
++
++  const addEntry = async (event) => {
++    event.preventDefault();
++    const trimmedUrl = url.trim();
++    if (!trimmedUrl || !collection) return;
++
++    setError('');
++    setIsSaving(true);
++    try {
++      await addCollectionEntry({
++        folder,
++        fileName: collection.seedFileName(),
++        url: trimmedUrl,
++      });
++      setUrl('');
++      onAdded();
++    }
++    catch (requestError) {
++      setError(translateLibraryError(t, requestError));
++    }
++    finally {
++      setIsSaving(false);
++    }
++  };
++
++  if (!collection) return null;
++
++  return (
++    <Dialog fullWidth maxWidth="xs" onClose={close} open={open}>
++      <form onSubmit={addEntry}>
++        <DialogTitle>{t(collection.addDialogTitleKey)}</DialogTitle>
++        <DialogContent>
++          {error && <Alert severity="error" sx={{ marginBottom: 2 }}>{error}</Alert>}
++          <TextField
++            autoFocus
++            disabled={isSaving}
++            fullWidth
++            label={t(collection.urlLabelKey)}
++            margin="dense"
++            onChange={(event) => setUrl(event.target.value)}
++            required
++            value={url}
++          />
++        </DialogContent>
++        <DialogActions>
++          <Button disabled={isSaving} onClick={close} sx={{ minHeight: 44 }}>
++            {t('general.buttons.cancel')}
++          </Button>
++          <Button
++            disabled={isSaving || !url.trim()}
++            sx={{ minHeight: 44 }}
++            type="submit"
++            variant="contained"
++          >
++            {t('library.folders.manager.add-entry-confirm')}
++          </Button>
++        </DialogActions>
++      </form>
++    </Dialog>
++  );
++};
++
++export default AddEntryDialog;

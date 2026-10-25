@@ -1,0 +1,127 @@
+diff --git a/src/jukebox/jukebox/library.py b/src/jukebox/jukebox/library.py
+index 0d9eb64..f9713fd 100644
+--- a/src/jukebox/jukebox/library.py
++++ b/src/jukebox/jukebox/library.py
+@@ -6,10 +6,14 @@ import os
+ import shutil
+ import tempfile
+ from pathlib import Path, PurePosixPath
++from urllib.parse import urlparse
++
++import requests
+ 
+ 
+ MAX_UPLOAD_SIZE = 1024 * 1024 * 1024
+ MAX_DELETE_ENTRIES = 1000
++URL_FETCH_TIMEOUT_SECONDS = 5
+ 
+ AUDIO_EXTENSIONS = frozenset({
+     '.aac',
+@@ -105,6 +109,30 @@ def _validate_file_type(name):
+         raise LibraryError(415, 'unsupported_file_type', f"'{name}' is not a supported library file.")
+ 
+ 
++def _validate_url(url):
++    if not isinstance(url, str) or '\n' in url or '\r' in url or '\x00' in url:
++        raise LibraryError(400, 'invalid_url', 'The URL is invalid.')
++    url = url.strip()
++    parsed = urlparse(url)
++    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
++        raise LibraryError(400, 'invalid_url', 'The URL must be a valid http(s) address.')
++    return url
++
++
++def _check_url_reachable(url):
++    """Confirm the URL responds, without downloading its (possibly unbounded) body."""
++    try:
++        with requests.get(url, timeout=URL_FETCH_TIMEOUT_SECONDS, stream=True) as response:
++            if response.status_code >= 400:
++                raise LibraryError(
++                    422,
++                    'url_unreachable',
++                    f'The URL responded with status {response.status_code}.',
++                )
++    except requests.RequestException as error:
++        raise LibraryError(422, 'url_unreachable', f'Could not reach the URL: {error}') from error
++
++
+ def _entry_type(name):
+     lower_name = name.casefold()
+     suffix = Path(lower_name).suffix
+@@ -308,6 +336,25 @@ class MusicLibrary:
+             raise _operation_error(error, f"create folder '{name}'") from error
+         return target.relative_to(self.root).as_posix()
+ 
++    def add_collection_entry(self, folder, file_name, url):
++        """Append a URL to a folder's playlist-generator marker file (livestream.txt, podcast.txt),
++
++        creating the file if it doesn't exist yet. The URL is checked for reachability first
++        (see playlistgenerator.py for how these files are later expanded into playable entries).
++        """
++        if not isinstance(file_name, str) or file_name not in TEXT_FILE_ENDINGS:
++            raise LibraryError(400, 'invalid_file_name', f"'{file_name}' is not a supported collection file.")
++        url = _validate_url(url)
++        _check_url_reachable(url)
++
++        target = self._directory(folder) / file_name
++        try:
++            with open(target, 'a', encoding='utf-8') as stream:
++                stream.write(f'{url}\n')
++        except OSError as error:
++            raise _operation_error(error, f"update '{file_name}'") from error
++        return target.relative_to(self.root).as_posix()
++
+     def list_entries(self, folder):
+         root = self.root
+         parent = self._directory(folder)
+diff --git a/src/jukebox/jukebox/api/server.py b/src/jukebox/jukebox/api/server.py
+index d52da51..3e47a64 100644
+--- a/src/jukebox/jukebox/api/server.py
++++ b/src/jukebox/jukebox/api/server.py
+@@ -322,6 +322,34 @@ class LibraryFolderHandler(StreamingJsonHandler):
+         self.write({'path': path})
+ 
+ 
++@tornado.web.stream_request_body
++class LibraryCollectionEntryHandler(StreamingJsonHandler):
++    def initialize(self, library, executor):
++        self.library = library
++        self.executor = executor
++
++    async def post(self):
++        if self.reject_oversized_body():
++            return
++        try:
++            body = self.json_body()
++            folder = body.get('folder')
++            file_name = body.get('file_name')
++            url = body.get('url')
++            path = await tornado.ioloop.IOLoop.current().run_in_executor(
++                self.executor,
++                self.library.add_collection_entry,
++                folder,
++                file_name,
++                url,
++            )
++        except LibraryError as error:
++            self.finish_library_error(error)
++            return
++        self.set_status(201)
++        self.write({'path': path})
++
++
+ @tornado.web.stream_request_body
+ class LibraryEntriesHandler(StreamingJsonHandler):
+     def initialize(self, library, executor):
+@@ -441,6 +469,11 @@ def make_application(
+                 LibraryFolderHandler,
+                 {'library': library, 'executor': library_executor},
+             ),
++            (
++                r'/api/v1/library/collection-entries',
++                LibraryCollectionEntryHandler,
++                {'library': library, 'executor': library_executor},
++            ),
+             (
+                 r'/api/v1/library/entries',
+                 LibraryEntriesHandler,

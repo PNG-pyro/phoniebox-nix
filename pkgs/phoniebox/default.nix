@@ -38,6 +38,7 @@ let
       ../../patches/podcasts-view-daemon.patch
       ../../patches/hide-dotfiles-in-collections.patch
       ../../patches/radio-view-daemon.patch
+      ../../patches/add-collection-entry-daemon.patch
     ];
   };
 
