@@ -1,0 +1,82 @@
+diff --git a/src/components/Library/library-header.jsx b/src/components/Library/library-header.jsx
+index f579998..34c4b26 100644
+--- a/src/components/Library/library-header.jsx
++++ b/src/components/Library/library-header.jsx
+@@ -12,6 +12,7 @@ import {
+   Tab,
+   Tabs,
+   TextField,
++  Typography,
+ } from "@mui/material";
+ 
+ import AlbumIcon from '@mui/icons-material/Album';
+@@ -44,6 +45,7 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter, sources }) => {
+   const source = sources.find(({ id }) => id === activeSource);
+   const sourceIds = ['overview', ...sources.map(({ id }) => id)];
+   const sourceValue = sourceIds.includes(activeSource) ? activeSource : false;
++  const activeViewEntry = source?.views?.find(({ id }) => id === activeView);
+ 
+   const navigateTo = (path) => {
+     localStorage.setItem('libraryLastListView', path);
+@@ -100,31 +102,36 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter, sources }) => {
+         </IconButton>
+       </Box>
+       {source?.views?.length > 1 &&
+-        <Tabs
+-          aria-label={t('library.header.views-label')}
+-          onChange={(_event, value) => navigateTo(`${source.id}/${value}`)}
+-          scrollButtons="auto"
+-          value={source.views.some(({ id }) => id === activeView) ? activeView : false}
+-          variant="scrollable"
+-          sx={{ borderBottom: 1, borderColor: 'divider', width: '100%' }}
+-        >
+-          {source.views.map(({ id, label }) => {
+-            const Icon = getViewIcon(id);
+-            return (
+-              <Tab
+-                icon={Icon && <Icon fontSize="small" />}
+-                key={id}
+-                label={activeView === id ? t(`library.header.${id}`, { defaultValue: label }) : undefined}
+-                sx={{
+-                  minHeight: 48,
+-                  minWidth: 0,
+-                  padding: activeView === id ? '6px 12px' : '6px',
+-                }}
+-                value={id}
+-              />
+-            );
+-          })}
+-        </Tabs>
++        <>
++          <Tabs
++            aria-label={t('library.header.views-label')}
++            onChange={(_event, value) => navigateTo(`${source.id}/${value}`)}
++            value={source.views.some(({ id }) => id === activeView) ? activeView : false}
++            variant="fullWidth"
++            sx={{ borderBottom: 1, borderColor: 'divider', width: '100%' }}
++          >
++            {source.views.map(({ id, label }) => {
++              const Icon = getViewIcon(id);
++              return (
++                <Tab
++                  aria-label={t(`library.header.${id}`, { defaultValue: label })}
++                  icon={Icon && <Icon fontSize="small" />}
++                  key={id}
++                  sx={{ minHeight: 48, minWidth: 0, padding: '6px' }}
++                  value={id}
++                />
++              );
++            })}
++          </Tabs>
++          <Typography
++            align="center"
++            color="text.secondary"
++            variant="caption"
++            sx={{ display: 'block', marginTop: 0.5, width: '100%' }}
++          >
++            {activeViewEntry && t(`library.header.${activeViewEntry.id}`, { defaultValue: activeViewEntry.label })}
++          </Typography>
++        </>
+       }
+       {showSearchInput &&
+         <TextField
