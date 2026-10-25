@@ -22,6 +22,7 @@ buildNpmPackage {
     ../../patches/floating-back-button.patch
     ../../patches/playlists-view-webapp.patch
     ../../patches/playlist-root-boundary.patch
+    ../../patches/playlist-actions.patch
   ];
 
   env = {
