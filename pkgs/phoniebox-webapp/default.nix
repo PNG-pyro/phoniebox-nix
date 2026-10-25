@@ -16,7 +16,7 @@ buildNpmPackage {
   npmDepsHash = "sha256-ewiwTnesYolBWgtAa6pVTUi9PlJA/HymfaiIlURWey0="; # first build prints the real one
 
   # Web app patches go here later (paths relative to src/webapp)
-  patches = [ ];
+  patches = [ ../../patches/scroll-memory.patch ];
 
   env = {
     NODE_OPTIONS = "--max-old-space-size=4096";

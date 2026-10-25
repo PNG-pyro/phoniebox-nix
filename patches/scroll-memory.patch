@@ -1,0 +1,139 @@
+diff --git a/src/components/Library/lists/albums/index.jsx b/src/components/Library/lists/albums/index.jsx
+index 363e739..470db4d 100644
+--- a/src/components/Library/lists/albums/index.jsx
++++ b/src/components/Library/lists/albums/index.jsx
+@@ -8,6 +8,7 @@ import {
+ 
+ import request from '../../../../utils/request';
+ import { flatByAlbum } from '../../../../utils/utils';
++import useScrollMemory from '../../../../utils/use-scroll-memory';
+ 
+ import AlbumList from "./album-list";
+ 
+@@ -23,6 +24,8 @@ const Albums = ({
+   const [error, setError] = useState(null);
+   const [isLoading, setIsLoading] = useState(true);
+ 
++  const scrollRef = useScrollMemory(`library-albums-scroll:${provider}:${view}`, !isLoading);
++
+   const search = ({ albumartist, album }) => {
+     if (musicFilter === '') return true;
+ 
+@@ -58,6 +61,7 @@ const Albums = ({
+ 
+   return (
+     <>
++      <div ref={scrollRef} />
+       {isLoading
+         ? <CircularProgress />
+         : <AlbumList
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index db3b93e..ef95a73 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -14,6 +14,7 @@ import {
+ } from "@mui/material";
+ 
+ import { listLibraryEntries } from '../../../../utils/library-api';
++import useScrollMemory from '../../../../utils/use-scroll-memory';
+ import CreateFolderDialog from './create-folder-dialog';
+ import DeleteEntriesDialog from './delete-entries-dialog';
+ import FolderList from "./folder-list";
+@@ -34,7 +35,7 @@ const Folders = ({
+   registerMusicToCard,
+ }) => {
+   const { t } = useTranslation();
+-  const { dir = ROOT_DIR } = useParams();
++  const { provider, view, dir = ROOT_DIR } = useParams();
+   const [folders, setFolders] = useState([]);
+   const [error, setError] = useState(null);
+   const [isLoading, setIsLoading] = useState(true);
+@@ -48,6 +49,8 @@ const Folders = ({
+   const [isDragging, setIsDragging] = useState(false);
+   const currentFolder = decodeURIComponent(dir);
+ 
++  const scrollRef = useScrollMemory(`library-folders-scroll:${provider}:${view}:${dir}`, !isLoading);
++
+   const search = ({ name }) => {
+     if (musicFilter === '') return true;
+ 
+@@ -165,6 +168,7 @@ const Folders = ({
+         width: '100%',
+       }}
+     >
++      <div ref={scrollRef} />
+       {!isSelecting &&
+         <LibraryActions
+           isSelecting={isManagementSelecting}
+diff --git a/src/utils/use-scroll-memory.js b/src/utils/use-scroll-memory.js
+new file mode 100644
+index 0000000..04f8694
+--- /dev/null
++++ b/src/utils/use-scroll-memory.js
+@@ -0,0 +1,66 @@
++import { useEffect, useRef } from 'react';
++
++// Walk up from an element to the nearest ancestor that actually scrolls
++const findScrollParent = (element) => {
++  let node = element && element.parentElement;
++  while (node) {
++    const { overflowY } = window.getComputedStyle(node);
++    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
++      return node;
++    }
++    node = node.parentElement;
++  }
++  return document.scrollingElement;
++};
++
++// Remembers how far a list was scrolled (per browser tab) and restores it once `ready` is true.
++// Returns a ref: attach it to an element inside the list, e.g. <div ref={scrollRef} />
++const useScrollMemory = (key, ready) => {
++  const anchorRef = useRef(null);
++
++  useEffect(() => {
++    if (!ready || !anchorRef.current) return undefined;
++    const scroller = findScrollParent(anchorRef.current);
++    if (!scroller) return undefined;
++
++    // Restore, one frame later so the list has been laid out
++    let saved = null;
++    try {
++      saved = sessionStorage.getItem(key);
++    } catch (error) {
++      // storage unavailable (e.g. private mode); just don't restore
++    }
++    if (saved !== null) {
++      requestAnimationFrame(() => { scroller.scrollTop = Number(saved); });
++    }
++
++    // Save while scrolling, at most once per frame
++    let frame = null;
++    const onScroll = () => {
++      if (frame) return;
++      frame = requestAnimationFrame(() => {
++        frame = null;
++        // Skip if the list is being torn down (its marker is gone),
++        // so leaving the page can't overwrite the position with 0
++        if (!anchorRef.current || !anchorRef.current.isConnected) return;
++        try {
++          sessionStorage.setItem(key, String(scroller.scrollTop));
++        } catch (error) {
++          // ignore
++        }
++      });
++    };
++
++    // When the page itself scrolls, the scroll events go to `window`, not the element
++    const eventTarget = scroller === document.scrollingElement ? window : scroller;
++    eventTarget.addEventListener('scroll', onScroll, { passive: true });
++    return () => {
++      eventTarget.removeEventListener('scroll', onScroll);
++      if (frame) cancelAnimationFrame(frame);
++    };
++  }, [key, ready]);
++
++  return anchorRef;
++};
++
++export default useScrollMemory;
