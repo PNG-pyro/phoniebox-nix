@@ -657,6 +657,21 @@ index 5a78207..ed2ac06 100644
      'play': {
          'package': 'player',
          'plugin': 'ctrl',
+diff --git a/src/jukebox/jukebox/playlistgenerator.py b/src/jukebox/jukebox/playlistgenerator.py
+index e7f5b50..8ea2cc9 100755
+--- a/src/jukebox/jukebox/playlistgenerator.py
++++ b/src/jukebox/jukebox/playlistgenerator.py
+@@ -279,7 +279,9 @@ class PlaylistCollector:
+                     'type': TYPE_DECODE[m.filetype],
+                     'name': m.name,
+                     'path': m.path,
+-                    'relpath': os.path.relpath(m.path, self._music_library_base_path)
++                    # Streams and podcast episodes are URLs, not files: pass them through unchanged
++                    'relpath': (m.path if m.filetype in (TYPE_STREAM, TYPE_PODCAST)
++                                else os.path.relpath(m.path, self._music_library_base_path))
+                 })
+ 
+     def _parse_nonrecusive(self, path='.'):
 diff --git a/src/webapp/src/commands/index.js b/src/webapp/src/commands/index.js
 index 1e98499..585b531 100644
 --- a/src/webapp/src/commands/index.js
