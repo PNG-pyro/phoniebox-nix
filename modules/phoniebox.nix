@@ -503,10 +503,7 @@ in
           ];
 
           preStart = ''
-            mkdir -p ${S}/src/jukebox ${S}/mpd ${S}/shared/{settings,audiofolders,playlists,cover-cache,logs}
-
-            mkdir -p ${S}/shared/audiofolders/Playlists
-            mkdir -p ${S}/shared/audiofolders/Music
+            mkdir -p ${S}/src/jukebox ${S}/mpd ${S}/shared/{settings,audiofolders,playlists,cover-cache,logs} ${S}/shared/audiofolders/Playlists ${S}/shared/audiofolders/Music ${S}/shared/audiofolders/Radio ${S}/shared/audiofolders/Podcasts
 
             # refreshed every start: these point into the store
             ln -sfn ${share}/resources ${S}/resources

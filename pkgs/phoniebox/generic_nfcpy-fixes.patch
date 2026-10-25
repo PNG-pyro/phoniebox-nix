@@ -1070,7 +1070,7 @@ index 0000000..95b028c
 +
 +export default AddToPlaylistDialog;
 diff --git a/src/webapp/src/components/Library/library-header.js b/src/webapp/src/components/Library/library-header.js
-index ab894f2..6af907a 100644
+index ab894f2..b1143b5 100644
 --- a/src/webapp/src/components/Library/library-header.js
 +++ b/src/webapp/src/components/Library/library-header.js
 @@ -1,4 +1,4 @@
@@ -1104,7 +1104,7 @@ index ab894f2..6af907a 100644
  import SearchIcon from '@mui/icons-material/Search';
  
  const LibraryHeader = ({ handleMusicFilter, musicFilter }) => {
-@@ -22,79 +29,75 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter }) => {
+@@ -22,79 +29,77 @@ const LibraryHeader = ({ handleMusicFilter, musicFilter }) => {
    const navigate = useNavigate();
    const { '*': view } = useParams();
    const { t } = useTranslation();
@@ -1119,6 +1119,8 @@ index ab894f2..6af907a 100644
 +  const views = [
 +    { value: 'albums', label: t('library.header.albums'), icon: <AlbumIcon /> },
 +    { value: 'playlists', label: 'Playlists', icon: <QueueMusicIcon /> },
++    { value: 'radio', label: 'Radio', icon: <RadioIcon /> },
++    { value: 'podcasts', label: 'Podcasts', icon: <PodcastsIcon /> },
 +    { value: 'folders', label: t('library.header.folders'), icon: <FolderIcon /> },
 +  ];
 +
@@ -1639,10 +1641,10 @@ index 0f22d2d..0d06496 100644
  }
  
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-link.js b/src/webapp/src/components/Library/lists/folders/folder-link.js
-index 1f55415..7b55c92 100644
+index 1f55415..4ae8772 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-link.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-link.js
-@@ -5,12 +5,15 @@ import {
+@@ -5,12 +5,16 @@ import {
  } from 'react-router-dom';
  
  const FolderLink = forwardRef((props, ref) => {
@@ -1655,13 +1657,14 @@ index 1f55415..7b55c92 100644
 -  const location = `/library/folders/${dir}${urlSearch}`;
 +
 +  // Stay in the view we're in: folders or playlists
-+  const view = pathname.startsWith('/library/playlists') ? 'playlists' : 'folders';
++  const match = pathname.match(/^\/library\/(playlists|radio|podcasts|folders)/);
++  const view = match ? match[1] : 'folders';
 +  const location = `/library/${view}/${dir}${urlSearch}`;
  
    return <Link ref={ref} to={location} {...props} />
  });
 diff --git a/src/webapp/src/components/Library/lists/folders/folder-list-item.js b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
-index 3be77fb..17e8bf0 100644
+index 3be77fb..66d4b67 100644
 --- a/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 +++ b/src/webapp/src/components/Library/lists/folders/folder-list-item.js
 @@ -1,5 +1,4 @@
@@ -1671,7 +1674,7 @@ index 3be77fb..17e8bf0 100644
  
  import {
    IconButton,
-@@ -8,26 +7,41 @@ import {
+@@ -8,26 +7,44 @@ import {
    ListItemText,
  } from '@mui/material';
  
@@ -1682,6 +1685,8 @@ index 3be77fb..17e8bf0 100644
 +import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 +import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 +import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
++import PodcastsIcon from '@mui/icons-material/Podcasts';
++import RadioIcon from '@mui/icons-material/Radio';
  
  import request from '../../../../utils/request';
 +import AddToPlaylistDialog from '../../add-to-playlist-dialog';
@@ -1693,6 +1698,7 @@ index 3be77fb..17e8bf0 100644
 +import QueueMusicIcon from '@mui/icons-material/QueueMusic';
 +
 +import { getPlaylistName } from '../../../../utils/playlists';
++import { getCollectionKind } from '../../../../utils/playlists';
 +
  const FolderListItem = ({
    folder,
@@ -1718,7 +1724,7 @@ index 3be77fb..17e8bf0 100644
        default: return;
      }
    }
-@@ -36,33 +50,126 @@ const FolderListItem = ({
+@@ -36,33 +53,132 @@ const FolderListItem = ({
      switch(type) {
        case 'directory': return registerMusicToCard('play_folder', { folder: relpath, recursive: true });
        case 'file': return registerMusicToCard('play_single', { song_url: relpath });
@@ -1743,7 +1749,13 @@ index 3be77fb..17e8bf0 100644
 +  // A song inside a playlist gets edit buttons instead of "+"
 +  const isEditable = !isSelecting && playlistName && type === 'file';
 +  const showAdd = !isSelecting && !isEditable && playlistItem !== null && isPlayable;
-+  const isPlaylistFolder = isDirectory && getPlaylistName(relpath) !== null;
++
++  const COLLECTION_ICONS = {
++    playlist: <QueueMusicIcon />,
++    radio: <RadioIcon />,
++    podcast: <PodcastsIcon />,
++  };
++  const collectionKind = isDirectory ? getCollectionKind(relpath) : null;
 +
 +  const editPlaylist = async (command, extra = {}) => {
 +    const { error } = await request(command, {
@@ -1840,9 +1852,9 @@ index 3be77fb..17e8bf0 100644
 +        sx={paddingRight ? { '& .MuiListItemButton-root': { pr: paddingRight } } : undefined}
 +      >
 +        <ListItemButton {...rowProps}>
-+          {isPlaylistFolder
++          {collectionKind
 +            ? <ListItemAvatar>
-+                <Avatar><QueueMusicIcon /></Avatar>
++                <Avatar>{COLLECTION_ICONS[collectionKind]}</Avatar>
 +              </ListItemAvatar>
 +            : <FolderTypeAvatar type={type} />
 +          }
@@ -2219,7 +2231,7 @@ index 0000000..7f3e78c
 +
 +export default PlaylistBanner;
 diff --git a/src/webapp/src/components/Library/lists/index.js b/src/webapp/src/components/Library/lists/index.js
-index e2b7a2d..d945899 100644
+index e2b7a2d..7f7993d 100644
 --- a/src/webapp/src/components/Library/lists/index.js
 +++ b/src/webapp/src/components/Library/lists/index.js
 @@ -9,6 +9,7 @@ import {
@@ -2284,7 +2296,7 @@ index e2b7a2d..d945899 100644
              />
              <Route
                path="folders/:dir"
-@@ -87,6 +105,22 @@ const LibraryLists = () => {
+@@ -87,6 +105,52 @@ const LibraryLists = () => {
                    musicFilter={musicFilter}
                    isSelecting={isSelecting}
                    registerMusicToCard={registerMusicToCard}
@@ -2304,11 +2316,41 @@ index e2b7a2d..d945899 100644
 +                  isSelecting={isSelecting}
 +                  registerMusicToCard={registerMusicToCard}
 +                  topDir="Playlists"
++                />
++              }
++            />
++           <Route
++              path="radio"
++              element={<Navigate to={`Radio${urlSearch}`} replace />}
++            />
++            <Route
++              path="radio/:dir"
++              element={
++                <Folders
++                  musicFilter={musicFilter}
++                  isSelecting={isSelecting}
++                  registerMusicToCard={registerMusicToCard}
++                  topDir="Radio"
++                />
++              }
++            />
++            <Route
++              path="podcasts"
++              element={<Navigate to={`Podcasts${urlSearch}`} replace />}
++            />
++            <Route
++              path="podcasts/:dir"
++              element={
++                <Folders
++                  musicFilter={musicFilter}
++                  isSelecting={isSelecting}
++                  registerMusicToCard={registerMusicToCard}
++                  topDir="Podcasts"
                  />
                }
              />
 diff --git a/src/webapp/src/components/Navigation/index.js b/src/webapp/src/components/Navigation/index.js
-index 3727b94..391fbb3 100644
+index 3727b94..3f76f21 100644
 --- a/src/webapp/src/components/Navigation/index.js
 +++ b/src/webapp/src/components/Navigation/index.js
 @@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
@@ -2355,7 +2397,7 @@ index 3727b94..391fbb3 100644
        />
 +      <BottomNavigationAction
 +        component="a"
-+        href="/upload/#v=up2k"
++        href="/upload/music/#v=up2k"
 +        target="_blank"
 +        rel="noopener"
 +        label="Upload"
@@ -2913,10 +2955,10 @@ index fedc57a..a17f4ea 100644
    socketRequest,
 diff --git a/src/webapp/src/utils/playlists.js b/src/webapp/src/utils/playlists.js
 new file mode 100644
-index 0000000..e99ea42
+index 0000000..8e1bc37
 --- /dev/null
 +++ b/src/webapp/src/utils/playlists.js
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,19 @@
 +// Playlists live at Playlists/<name>.
 +// Returns <name> for a playlist folder path, or null for anything else.
 +export const getPlaylistName = (path) => {
@@ -2924,6 +2966,17 @@ index 0000000..e99ea42
 +  const clean = path.replace(/^\.\//, '');
 +  const match = clean.match(/^Playlists\/([^/]+)\/?$/);
 +  return match ? match[1] : null;
++};
++
++// Collection folders live at <Playlists|Radio|Podcasts>/<name>.
++// Returns 'playlist', 'radio' or 'podcast' for such a folder, or null for anything else.
++const COLLECTION_KINDS = { Playlists: 'playlist', Radio: 'radio', Podcasts: 'podcast' };
++
++export const getCollectionKind = (path) => {
++  if (!path) return null;
++  const clean = path.replace(/^\.\//, '');
++  const match = clean.match(/^(Playlists|Radio|Podcasts)\/[^/]+\/?$/);
++  return match ? COLLECTION_KINDS[match[1]] : null;
 +};
 diff --git a/src/webapp/src/utils/request.js b/src/webapp/src/utils/request.js
 index b5dddf2..5b2cdb3 100644
