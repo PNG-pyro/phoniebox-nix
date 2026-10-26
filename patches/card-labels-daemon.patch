@@ -1,0 +1,30 @@
+diff --git a/src/jukebox/components/rfid/cards/__init__.py b/src/jukebox/components/rfid/cards/__init__.py
+index 65e3ff8..c320fea 100644
+--- a/src/jukebox/components/rfid/cards/__init__.py
++++ b/src/jukebox/components/rfid/cards/__init__.py
+@@ -61,6 +61,8 @@ def list_cards():
+                 card_list[card_id]['ignore_same_id_delay'] = action['ignore_same_id_delay']
+             if 'ignore_card_removal_action' in action.keys():
+                 card_list[card_id]['ignore_card_removal_action'] = action['ignore_card_removal_action']
++            if 'label' in card_action:
++                card_list[card_id]['label'] = card_action['label']
+             alias = card_action.get('alias', None)
+             if alias is not None:
+                 card_list[card_id]['from_alias'] = alias
+@@ -91,6 +93,7 @@ def delete_card(card_id: str, auto_save: bool = True):
+ def register_card(card_id: str, cmd_alias: str,
+                   args: Optional[List] = None, kwargs: Optional[Dict] = None,
+                   ignore_card_removal_action: Optional[bool] = None, ignore_same_id_delay: Optional[bool] = None,
++                  label: Optional[str] = None,
+                   overwrite: bool = False,
+                   auto_save: bool = True):
+     """Register a new card based on quick-selection
+@@ -123,6 +126,8 @@ def register_card(card_id: str, cmd_alias: str,
+             cfg_cards[card_id]['ignore_same_id_delay'] = ignore_same_id_delay
+         if ignore_card_removal_action is not None:
+             cfg_cards[card_id]['ignore_card_removal_action'] = ignore_card_removal_action
++        if label:
++            cfg_cards[card_id]['label'] = label
+         if auto_save:
+             cfg_cards.save()
+     publishing.get_publisher().send(f'{plugs.loaded_as(__name__)}.database.has_changed', time.ctime())

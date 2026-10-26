@@ -1,0 +1,252 @@
+diff --git a/public/locales/de/translation.json b/public/locales/de/translation.json
+index a9fdd9e..09bed0f 100644
+--- a/public/locales/de/translation.json
++++ b/public/locales/de/translation.json
+@@ -109,7 +109,8 @@
+     },
+     "form": {
+       "no-card-swiped": "Bitte scanne eine Karte um einen ID zu erhalten. Diese wird dann zur Registrierung einer neuen Aktion verwendet.",
+-      "no-card-id": "Keine Karten-ID vorhanden"
++      "no-card-id": "Keine Karten-ID vorhanden",
++      "label": "Name"
+     },
+     "list": {
+       "no-cards-registered": "Es wurden noch keine Karten registriert!"
+diff --git a/public/locales/en/translation.json b/public/locales/en/translation.json
+index 6a4e935..8480f55 100644
+--- a/public/locales/en/translation.json
++++ b/public/locales/en/translation.json
+@@ -109,7 +109,8 @@
+     },
+     "form": {
+       "no-card-swiped": "Please swipe a card to receive an ID which will be used to register a new action.",
+-      "no-card-id": "No card ID"
++      "no-card-id": "No card ID",
++      "label": "Name"
+     },
+     "list": {
+       "no-cards-registered": "No cards registered!"
+diff --git a/src/components/Cards/controls/actions-controls.jsx b/src/components/Cards/controls/actions-controls.jsx
+index 0698370..9694a3c 100644
+--- a/src/components/Cards/controls/actions-controls.jsx
++++ b/src/components/Cards/controls/actions-controls.jsx
+@@ -17,6 +17,7 @@ import {
+ const ActionsControls = ({
+   actionData,
+   cardId,
++  label,
+ }) => {
+   const { t } = useTranslation();
+   const navigate = useNavigate();
+@@ -30,6 +31,7 @@ const ActionsControls = ({
+     const kwargs = {
+       card_id: cardId.toString(),
+       cmd_alias,
++      label: label || '',
+       overwrite: true,
+       ...(args.length && { args }),
+     };
+diff --git a/src/components/Cards/edit.jsx b/src/components/Cards/edit.jsx
+index 1811033..6108e72 100644
+--- a/src/components/Cards/edit.jsx
++++ b/src/components/Cards/edit.jsx
+@@ -13,6 +13,7 @@ const CardsEdit = () => {
+   const { t } = useTranslation();
+   const { cardId } = useParams();
+   const [actionData, setActionData] = useState({});
++  const [label, setLabel] = useState('');
+ 
+   useEffect(() => {
+     const loadCardList = async () => {
+@@ -22,13 +23,15 @@ const CardsEdit = () => {
+         if (result && result[cardId]) {
+           const {
+             action: { args },
+-            from_alias: command
++            from_alias: command,
++            label: existingLabel,
+           } = result[cardId];
+ 
+           const action = findActionByCommand(command);
+           const actionData = buildActionData(action, command, args);
+ 
+           setActionData(actionData);
++          setLabel(existingLabel || '');
+         }
+ 
+         if (error) {
+@@ -46,6 +49,8 @@ const CardsEdit = () => {
+       cardId={cardId}
+       actionData={actionData}
+       setActionData={setActionData}
++      label={label}
++      setLabel={setLabel}
+     />
+   );
+ };
+diff --git a/src/components/Cards/form.jsx b/src/components/Cards/form.jsx
+index 9aa5f45..2592d8e 100644
+--- a/src/components/Cards/form.jsx
++++ b/src/components/Cards/form.jsx
+@@ -1,3 +1,4 @@
++import { useEffect } from 'react';
+ import { useTranslation } from 'react-i18next';
+ 
+ import {
+@@ -6,6 +7,7 @@ import {
+   CardContent,
+   CardHeader,
+   Grid,
++  TextField,
+   Typography
+ } from '@mui/material';
+ import BookmarkIcon from '@mui/icons-material/Bookmark';
+@@ -13,6 +15,7 @@ import BookmarkIcon from '@mui/icons-material/Bookmark';
+ import Header from '../Header';
+ import ActionsControls from './controls/actions-controls';
+ import ControlsSelector from './controls/controls-selector';
++import useSuggestedLabel from './use-suggested-label';
+ 
+ const InfoNoCardSwiped = () => {
+   const { t } = useTranslation();
+@@ -29,8 +32,15 @@ const CardsForm = ({
+   cardId,
+   actionData,
+   setActionData,
++  label,
++  setLabel,
+ }) => {
+   const { t } = useTranslation();
++  const suggestedLabel = useSuggestedLabel(actionData);
++
++  useEffect(() => {
++    if (!label && suggestedLabel) setLabel(suggestedLabel);
++  }, [label, suggestedLabel, setLabel]);
+ 
+   return (
+     <>
+@@ -46,9 +56,16 @@ const CardsForm = ({
+               }
+               title={
+                 cardId
+-                  ? cardId
++                  ? <TextField
++                      fullWidth
++                      label={t('cards.form.label')}
++                      onChange={(event) => setLabel(event.target.value)}
++                      value={label}
++                      variant="standard"
++                    />
+                   : t('cards.form.no-card-id')
+               }
++              subheader={cardId}
+             />
+             <CardContent>
+               {cardId &&
+@@ -63,6 +80,7 @@ const CardsForm = ({
+                   <ActionsControls
+                     actionData={actionData}
+                     cardId={cardId}
++                    label={label}
+                   />
+                 </>
+               }
+diff --git a/src/components/Cards/list.jsx b/src/components/Cards/list.jsx
+index ed4fff9..272b934 100644
+--- a/src/components/Cards/list.jsx
++++ b/src/components/Cards/list.jsx
+@@ -48,8 +48,8 @@ const CardsList = ({ cardsList }) => {
+             </Avatar>
+           </ListItemAvatar>
+           <ListItemText
+-            primary={cardId}
+-            secondary={description}
++            primary={card.label || cardId}
++            secondary={card.label ? `${cardId} • ${description}` : description}
+           />
+         </ListItemButton>
+       </ListItem>
+diff --git a/src/components/Cards/register.jsx b/src/components/Cards/register.jsx
+index 9f5c393..c0883cb 100644
+--- a/src/components/Cards/register.jsx
++++ b/src/components/Cards/register.jsx
+@@ -17,6 +17,7 @@ const CardsRegister = () => {
+ 
+   const [cardId, setCardId] = useState(undefined);
+   const [actionData, setActionData] = useState(registerCard?.actionData || {});
++  const [label, setLabel] = useState('');
+ 
+   useEffect(() => {
+     setState(state => (omit(['rfid.card_id'], state)));
+@@ -32,6 +33,8 @@ const CardsRegister = () => {
+       cardId={cardId}
+       actionData={actionData}
+       setActionData={setActionData}
++      label={label}
++      setLabel={setLabel}
+     />
+   );
+ };
+diff --git a/src/components/Cards/use-suggested-label.js b/src/components/Cards/use-suggested-label.js
+new file mode 100644
+index 0000000..1fa4fab
+--- /dev/null
++++ b/src/components/Cards/use-suggested-label.js
+@@ -0,0 +1,57 @@
++import { useEffect, useState } from 'react';
++import { last } from 'ramda';
++
++import request from '../../utils/request';
++import { getActionAndCommand, getArgsValues } from './utils';
++
++const basename = (path) => last((path || '').split('/').filter(Boolean)) || '';
++
++// Suggests a card label from whatever the card is set to play - only for the
++// play-music commands, where there's an obvious name to offer. Other commands
++// (volume, timers, say-my-ip, sync, ...) have no natural "content name", so
++// callers just get an empty suggestion and fall back to manual entry.
++const useSuggestedLabel = (actionData) => {
++  const [suggestedLabel, setSuggestedLabel] = useState('');
++  const { command } = getActionAndCommand(actionData);
++
++  useEffect(() => {
++    let isCurrent = true;
++
++    const resolve = async () => {
++      if (command === 'play_album') {
++        const [, album] = getArgsValues(actionData);
++        if (isCurrent) setSuggestedLabel(album || '');
++        return;
++      }
++
++      if (command === 'play_folder') {
++        const [folder] = getArgsValues(actionData);
++        if (isCurrent) setSuggestedLabel(basename(folder));
++        return;
++      }
++
++      if (command === 'play_single') {
++        const [songUrl, provider] = getArgsValues(actionData);
++        if (!songUrl) {
++          if (isCurrent) setSuggestedLabel('');
++          return;
++        }
++        const { result } = await request('getSongByUrl', { song_url: songUrl, provider });
++        if (isCurrent) setSuggestedLabel(result?.[0]?.title || basename(songUrl));
++        return;
++      }
++
++      if (isCurrent) setSuggestedLabel('');
++    };
++
++    resolve();
++
++    return () => {
++      isCurrent = false;
++    };
++  }, [actionData, command]);
++
++  return suggestedLabel;
++};
++
++export default useSuggestedLabel;

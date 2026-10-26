@@ -40,6 +40,7 @@ let
       ../../patches/radio-view-daemon.patch
       ../../patches/add-collection-entry-daemon.patch
       ../../patches/collection-view-metadata-daemon.patch
+      ../../patches/card-labels-daemon.patch
     ];
   };
 

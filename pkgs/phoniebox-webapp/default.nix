@@ -34,6 +34,7 @@ buildNpmPackage {
     ../../patches/view-tabs-title-row.patch
     ../../patches/add-collection-entry-webapp.patch
     ../../patches/collection-view-metadata-webapp.patch
+    ../../patches/card-labels-webapp.patch
   ];
 
   env = {
