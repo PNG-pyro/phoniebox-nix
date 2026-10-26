@@ -39,6 +39,7 @@ let
       ../../patches/hide-dotfiles-in-collections.patch
       ../../patches/radio-view-daemon.patch
       ../../patches/add-collection-entry-daemon.patch
+      ../../patches/collection-view-metadata-daemon.patch
     ];
   };
 

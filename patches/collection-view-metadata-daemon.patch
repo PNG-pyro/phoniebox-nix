@@ -1,0 +1,103 @@
+diff --git a/src/jukebox/components/player/backends/mpd.py b/src/jukebox/components/player/backends/mpd.py
+index cfda128..a021580 100644
+--- a/src/jukebox/components/player/backends/mpd.py
++++ b/src/jukebox/components/player/backends/mpd.py
+@@ -590,7 +590,20 @@ class PlayerMPD:
+         """
+         plc = playlistgenerator.PlaylistCollector(components.player.get_music_library_path())
+         plc.get_directory_content(folder)
+-        return plc.playlist
++        entries = plc.playlist
++
++        # Files are tracked by MPD under the same relative path, so their tags (if any)
++        # are available for free - e.g. this is what lets the Playlists view show
++        # "artist - title" instead of the bare file name.
++        with self.mpd_lock:
++            for entry in entries:
++                if entry['type'] != 'file':
++                    continue
++                tags = self.mpd_retry_with_mutex(self.mpd_client.find, 'file', entry['relpath'])
++                if tags:
++                    entry.update({k: v for k, v in tags[0].items() if k in ('artist', 'title', 'duration')})
++
++        return entries
+ 
+     @plugs.tag
+     def play_folder(self, folder: str, recursive: bool = False) -> None:
+diff --git a/src/jukebox/jukebox/playlistgenerator.py b/src/jukebox/jukebox/playlistgenerator.py
+index 86452e1..7d59a91 100755
+--- a/src/jukebox/jukebox/playlistgenerator.py
++++ b/src/jukebox/jukebox/playlistgenerator.py
+@@ -45,6 +45,7 @@ In ``*.txt`` and ``*.m3u`` files, all lines starting with ``#`` are ignored.
+ # that formats the NamedTuple to URI strings according to player
+ # This also does not consider a mixed player setup (mpd/spotify)
+ import copy
++import html
+ import os
+ import os.path
+ import logging
+@@ -60,6 +61,12 @@ logger = logging.getLogger('jb.plgen')
+ # From .xml podcasts, need to parse out these strings:
+ # '<enclosure url="https://podcast-mp3.dradio.de/podcast/2020/07/19/balzen_flirten_liebhaben_wie_tiere_fuer_nachwuchs_drk_20200719_0730_0126ac2f.mp3" length="19204101" type="audio/mpeg"/>'  # noqa: E501
+ enclosure_re = re.compile(r'.*enclosure.*url="([^"]*)"')
++# RSS <item> entries, so the episode title next to an enclosure can be matched to it -
++# feeds aren't always well-formed XML, so this is deliberately a regex, not a real XML parser.
++item_re = re.compile(r'<item\b.*?>(.*?)</item>', re.IGNORECASE | re.DOTALL)
++item_enclosure_re = re.compile(r'<enclosure\b[^>]*\burl="([^"]*)"', re.IGNORECASE)
++item_title_re = re.compile(r'<title\b[^>]*>(.*?)</title>', re.IGNORECASE | re.DOTALL)
++cdata_re = re.compile(r'^<!\[CDATA\[(.*)\]\]>$', re.DOTALL)
+ 
+ TYPE_FILE = 0
+ TYPE_DIR = 1
+@@ -89,6 +96,14 @@ class PlaylistEntry:
+         return self._type
+ 
+ 
++def _decode_episode_title(raw_title):
++    title = raw_title.strip()
++    cdata_match = cdata_re.match(title)
++    if cdata_match:
++        title = cdata_match.group(1).strip()
++    return html.unescape(title)
++
++
+ def decode_podcast_core(url, playlist):
+     # Example url:
+     # url = 'http://www.kakadu.de/podcast-kakadu.2730.de.podcast.xml'
+@@ -102,12 +117,31 @@ def decode_podcast_core(url, playlist):
+         return
+     if r.status_code != 200:
+         logger.error(f"Got error code {r.status_code} fetching from '{url}'")
+-    er = enclosure_re.findall(r.content.decode(r.encoding) or 'utf-8')
+-    if len(er) == 0:
++    content = r.content.decode(r.encoding or 'utf-8', errors='replace')
++
++    # Episode titles live in the same <item> as the enclosure. Pair them up so playback
++    # (which uses the enclosure URL as path, unaffected by any of this) gets a readable
++    # name instead of the bare MP3 URL.
++    added = 0
++    for item in item_re.findall(content):
++        enclosure_match = item_enclosure_re.search(item)
++        if not enclosure_match:
++            continue
++        enclosure_url = enclosure_match.group(1)
++        title_match = item_title_re.search(item)
++        name = _decode_episode_title(title_match.group(1)) if title_match else enclosure_url
++        playlist.append(PlaylistEntry(TYPE_PODCAST, name, enclosure_url))
++        added += 1
++
++    if added == 0:
++        # Fallback for feeds that don't use <item> (e.g. malformed or non-RSS) - same
++        # behavior as before <item>/<title> pairing was added, just the enclosure URL.
++        for exp in enclosure_re.findall(content):
++            playlist.append(PlaylistEntry(TYPE_PODCAST, exp, exp))
++            added += 1
++
++    if added == 0:
+         logger.error(f"Zero file entries in parsed content from '{url}'")
+-    for exp in er:
+-        # print(f"{exp}")
+-        playlist.append(PlaylistEntry(TYPE_PODCAST, exp, exp))
+ 
+ 
+ def decode_podcast(filename: str, path, playlist):

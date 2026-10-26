@@ -1,0 +1,50 @@
+diff --git a/src/components/Library/lists/folders/folder-list-item.jsx b/src/components/Library/lists/folders/folder-list-item.jsx
+index 9e1e0a8..6db635a 100644
+--- a/src/components/Library/lists/folders/folder-list-item.jsx
++++ b/src/components/Library/lists/folders/folder-list-item.jsx
+@@ -13,6 +13,7 @@ import {
+ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+ 
+ import request from '../../../../utils/request';
++import { toHHMMSS } from '../../../../utils/utils';
+ import FolderLink from './folder-link';
+ import FolderTypeAvatar from './folder-type-avatar';
+ 
+@@ -26,7 +27,15 @@ const FolderListItem = ({
+   registerMusicToCard,
+ }) => {
+   const { t } = useTranslation();
+-  const { type, name, relpath } = folder;
++  const { artist, duration, name, relpath, title, type } = folder;
++
++  // Only files carry MPD tags (see get_folder_content) - when present, show
++  // "artist - duration" the same way the Albums view shows song metadata,
++  // instead of the bare file name.
++  const primary = title || name;
++  const secondary = title
++    ? [artist, duration != null ? toHHMMSS(duration) : null].filter(Boolean).join(' • ') || null
++    : null;
+ 
+   const playItem = () => {
+     switch(type) {
+@@ -54,7 +63,9 @@ const FolderListItem = ({
+     return playItem();
+   };
+ 
+-  const secondaryAction = !isManagementSelecting && type === 'directory'
++  // A radio station folder holds a single stream URL - drilling into it only exposes
++  // that bare URL with nothing useful to do there, so skip the affordance entirely.
++  const secondaryAction = !isManagementSelecting && type === 'directory' && collectionKind !== 'radio'
+     ? <Tooltip title={t('library.folders.show-folder-content')}>
+         <IconButton
+           aria-label={t('library.folders.show-folder-content')}
+@@ -95,7 +106,8 @@ const FolderListItem = ({
+         }
+         <FolderTypeAvatar collectionKind={collectionKind} type={type} />
+         <ListItemText
+-          primary={name}
++          primary={primary}
++          secondary={secondary}
+           slotProps={{
+             primary: {
+               sx: { overflowWrap: 'anywhere' },

@@ -33,6 +33,7 @@ buildNpmPackage {
     ../../patches/responsive-view-tabs.patch
     ../../patches/view-tabs-title-row.patch
     ../../patches/add-collection-entry-webapp.patch
+    ../../patches/collection-view-metadata-webapp.patch
   ];
 
   env = {
