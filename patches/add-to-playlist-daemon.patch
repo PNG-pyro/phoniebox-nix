@@ -1,0 +1,170 @@
+diff --git a/src/jukebox/components/player/backends/mpd.py b/src/jukebox/components/player/backends/mpd.py
+index a021580..53597da 100644
+--- a/src/jukebox/components/player/backends/mpd.py
++++ b/src/jukebox/components/player/backends/mpd.py
+@@ -97,11 +97,20 @@ import jukebox.publishing as publishing
+ import jukebox.playlistgenerator as playlistgenerator
+ 
+ from jukebox.NvManager import nv_manager
++from jukebox.library import resolve_library_path
+ from .coverart_cache_manager import CoverartCacheManager
+ 
+ logger = logging.getLogger('jb.PlayerMPD')
+ cfg = jukebox.cfghandler.get_handler('jukebox')
+ 
++#: URL schemes playlistgenerator.decode_m3u passes through verbatim rather than
++#: treating as a file path relative to the m3u
++M3U_URL_SCHEMES = ('http://', 'https://', 'ftp://')
++
++
++def _is_url(line: str) -> bool:
++    return line.startswith(M3U_URL_SCHEMES)
++
+ 
+ class MpdLock:
+     def __init__(self, client: mpd.MPDClient, host: str, port: int):
+@@ -605,6 +614,144 @@ class PlayerMPD:
+ 
+         return entries
+ 
++    @staticmethod
++    def _playlist_file(playlist_dir: Path) -> Path:
++        """The m3u a playlist folder is represented by.
++
++        Picks the alphabetically first one, which is the same file
++        playlistgenerator.decode_m3u would use when the folder is played.
++        """
++        existing = sorted(
++            (entry for entry in os.listdir(playlist_dir) if entry.casefold().endswith('.m3u')),
++            key=str.casefold,
++        )
++        return playlist_dir / (existing[0] if existing else f'{playlist_dir.name}.m3u')
++
++    def _resolve_songs(self, library_path, song_url=None, folder=None,
++                       albumartist=None, album=None, recursive=True):
++        """Library-relative paths (or stream URLs) of the songs a picked item stands for.
++
++        An m3u holds one file path per line, so folders and albums cannot be added as a
++        single entry - they are expanded into their songs here.
++        """
++        if song_url:
++            return [self.harmonize_mpd_url(song_url)]
++
++        if folder is not None:
++            folder_abs = resolve_library_path(library_path, folder, require_exists=True)
++            m3us = sorted(
++                (entry for entry in os.listdir(folder_abs) if entry.casefold().endswith('.m3u')),
++                key=str.casefold,
++            ) if folder_abs.is_dir() else []
++            if m3us:
++                # Another playlist folder: take its entries, in playlist order
++                with open(folder_abs / m3us[0], encoding='utf-8') as stream:
++                    lines = [line.strip() for line in stream]
++                return [
++                    line if _is_url(line)
++                    else os.path.relpath(os.path.normpath(os.path.join(folder_abs, line)), library_path)
++                    for line in lines if line and not line.startswith('#')
++                ]
++            lister = self.mpd_client.listall if recursive else self.mpd_client.lsinfo
++            entries = self.mpd_retry_with_mutex(lister, folder)
++            return sorted(entry['file'] for entry in (entries or []) if 'file' in entry)
++
++        if album is not None:
++            if albumartist:
++                songs = self.mpd_retry_with_mutex(
++                    self.mpd_client.find, 'albumartist', albumartist, 'album', album)
++            else:
++                songs = self.mpd_retry_with_mutex(self.mpd_client.find, 'album', album)
++
++            def num(value):
++                # MPD tags come as '3', '3/12', or a list of those
++                if isinstance(value, list):
++                    value = value[0] if value else ''
++                try:
++                    return int(str(value).split('/')[0])
++                except ValueError:
++                    return 0
++
++            songs = sorted(
++                songs or [],
++                key=lambda song: (num(song.get('disc', 0)), num(song.get('track', 0)), song['file']),
++            )
++            return [song['file'] for song in songs]
++
++        raise ValueError('Nothing to add: expected one of song_url, folder or album')
++
++    @plugs.tag
++    def add_to_playlist(self, playlist_folder: str, song_url=None, folder=None,
++                        albumartist=None, album=None, recursive=True):
++        """Append a song, folder or album to a playlist folder's m3u
++
++        :param playlist_folder: Folder holding the m3u, relative to the music library
++            (e.g. 'Playlists/High Energy')
++
++        Songs already in the playlist are skipped, unless
++        ``playermpd.playlists.allow_duplicates`` is set.
++        """
++        library_path = os.path.expanduser(components.player.get_music_library_path())
++        playlist_dir = resolve_library_path(
++            library_path, playlist_folder, allow_root=False, require_exists=True)
++        if not playlist_dir.is_dir():
++            raise NotADirectoryError(f"Playlist folder '{playlist_folder}' doesn't exist")
++
++        playlist_file = self._playlist_file(playlist_dir)
++        items = self._resolve_songs(library_path, song_url, folder, albumartist, album, recursive)
++
++        allow_duplicates = cfg.getn('playermpd', 'playlists', 'allow_duplicates', default=False)
++
++        content = ''
++        if playlist_file.exists():
++            with open(playlist_file, encoding='utf-8') as stream:
++                content = stream.read()
++        # Compare resolved targets, not raw lines: the same song can be spelled
++        # differently ('./x.mp3' vs 'x.mp3') and still be the same file.
++        existing = {
++            line if _is_url(line) else os.path.normpath(os.path.join(playlist_dir, line))
++            for line in (raw.strip() for raw in content.splitlines())
++            if line and not line.startswith('#')
++        }
++
++        new_lines = []
++        new_songs = []
++        skipped = 0
++        for item in items:
++            if _is_url(item):
++                key = line = item
++                song = None
++            else:
++                key = os.path.normpath(os.path.join(library_path, item))
++                # m3u paths are relative to the playlist file's own folder
++                line = os.path.relpath(key, playlist_dir)
++                song = item
++            if key in existing and not allow_duplicates:
++                skipped += 1
++                continue
++            existing.add(key)
++            new_lines.append(line)
++            if song:
++                new_songs.append(song)
++
++        if new_lines:
++            with open(playlist_file, 'a', encoding='utf-8') as stream:
++                if not content:
++                    stream.write('#EXTM3U\n')
++                elif not content.endswith('\n'):
++                    stream.write('\n')
++                stream.write(''.join(f'{line}\n' for line in new_lines))
++
++        # If this playlist is what's playing right now, append to the live queue too,
++        # so the additions show up without having to restart the folder.
++        current = self.music_player_status['player_status'].get('last_played_folder', '')
++        playlist_rel = os.path.relpath(playlist_dir, library_path)
++        if new_songs and current and os.path.normpath(current) == os.path.normpath(playlist_rel):
++            for song in new_songs:
++                self.mpd_retry_with_mutex(self.mpd_client.add, song)
++
++        return {'added': len(new_lines), 'skipped': skipped}
++
+     @plugs.tag
+     def play_folder(self, folder: str, recursive: bool = False) -> None:
+         """

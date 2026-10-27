@@ -1,0 +1,302 @@
+diff --git a/public/locales/de/translation.json b/public/locales/de/translation.json
+index 09bed0f..03a3998 100644
+--- a/public/locales/de/translation.json
++++ b/public/locales/de/translation.json
+@@ -151,7 +151,8 @@
+       "show-all": "Alle anzeigen"
+     },
+     "selector-header": {
+-      "title": "Wähle ein Album, einen Ordner oder einen Song aus"
++      "title": "Wähle ein Album, einen Ordner oder einen Song aus",
++      "add-to-playlist-title": "Wähle ein Album, einen Ordner oder einen Song zum Hinzufügen aus"
+     },
+     "folders": {
+       "no-music": "☝️ Keine Musik vorhanden!",
+@@ -167,6 +168,14 @@
+       "podcast-banner_other": "Podcast: {{name}} ({{count}} Folgen)",
+       "radio-banner_one": "Radio: {{name}} ({{count}} Sender)",
+       "radio-banner_other": "Radio: {{name}} ({{count}} Sender)",
++      "add-result": {
++        "added_one": "{{count}} Titel hinzugefügt.",
++        "added_other": "{{count}} Titel hinzugefügt.",
++        "skipped_one": "{{count}} Titel war bereits in der Playlist.",
++        "skipped_other": "{{count}} Titel waren bereits in der Playlist.",
++        "nothing": "Es gab nichts hinzuzufügen.",
++        "failed": "Die Titel konnten nicht zur Playlist hinzugefügt werden."
++      },
+       "manager": {
+         "actions-label": "Aktionen für Bibliotheksdateien",
+         "upload": "Hochladen",
+@@ -176,6 +185,7 @@
+         "create-playlist": "Neue Playlist",
+         "create-podcast": "Neuer Podcast",
+         "create-radio": "Neuer Radiosender",
++        "add-music": "Musik hinzufügen",
+         "select": "Auswählen",
+         "select-item": "{{name}} auswählen",
+         "delete-selected_one": "{{count}} Element löschen",
+diff --git a/public/locales/en/translation.json b/public/locales/en/translation.json
+index 8480f55..3110f2c 100644
+--- a/public/locales/en/translation.json
++++ b/public/locales/en/translation.json
+@@ -151,7 +151,8 @@
+       "show-all": "Show all"
+     },
+     "selector-header": {
+-      "title": "Select an album, folder or song"
++      "title": "Select an album, folder or song",
++      "add-to-playlist-title": "Select an album, folder or song to add"
+     },
+     "folders": {
+       "no-music": "☝️ No music found!",
+@@ -167,6 +168,14 @@
+       "podcast-banner_other": "Podcast: {{name}} ({{count}} episodes)",
+       "radio-banner_one": "Radio: {{name}} ({{count}} station)",
+       "radio-banner_other": "Radio: {{name}} ({{count}} stations)",
++      "add-result": {
++        "added_one": "Added {{count}} track.",
++        "added_other": "Added {{count}} tracks.",
++        "skipped_one": "{{count}} track was already in the playlist.",
++        "skipped_other": "{{count}} tracks were already in the playlist.",
++        "nothing": "There was nothing to add.",
++        "failed": "The tracks could not be added to the playlist."
++      },
+       "manager": {
+         "actions-label": "Library file actions",
+         "upload": "Upload",
+@@ -176,6 +185,7 @@
+         "create-playlist": "New playlist",
+         "create-podcast": "New podcast",
+         "create-radio": "New radio station",
++        "add-music": "Add music",
+         "select": "Select",
+         "select-item": "Select {{name}}",
+         "delete-selected_one": "Delete {{count}} item",
+diff --git a/src/commands/index.js b/src/commands/index.js
+index c2f40e9..caa08c5 100644
+--- a/src/commands/index.js
++++ b/src/commands/index.js
+@@ -45,6 +45,11 @@ const commands = {
+     plugin: 'ctrl',
+     method: 'get_folder_content',
+   },
++  addToPlaylist: {
++    _package: 'player',
++    plugin: 'ctrl',
++    method: 'add_to_playlist',
++  },
+   cardsList: {
+     _package: 'cards',
+     plugin: 'list_cards',
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index 960c5bf..9ba1e94 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -3,15 +3,22 @@ import {
+   useEffect,
+   useState,
+ } from "react";
+-import { useParams } from 'react-router-dom';
++import {
++  createSearchParams,
++  useLocation,
++  useNavigate,
++  useParams,
++} from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
+ 
+ import {
+   Alert,
+   Box,
++  Button,
+   CircularProgress,
+   Typography,
+ } from "@mui/material";
++import AddIcon from '@mui/icons-material/Add';
+ 
+ import { listLibraryEntries } from '../../../../utils/library-api';
+ import request from '../../../../utils/request';
+@@ -41,7 +48,10 @@ const Folders = ({
+ }) => {
+   const { t } = useTranslation();
+   const { provider, view, dir = ROOT_DIR } = useParams();
++  const navigate = useNavigate();
++  const location = useLocation();
+   const collection = COLLECTION_KINDS[collectionKind];
++  const [addResult, setAddResult] = useState(null);
+   const [folders, setFolders] = useState([]);
+   const [expandedEntries, setExpandedEntries] = useState(null);
+   const [error, setError] = useState(null);
+@@ -109,6 +119,34 @@ const Folders = ({
+     setReloadNumber((value) => value + 1);
+   }, []);
+ 
++  // The picker hands its result back through navigation state; show it once, then
++  // clear it so a reload or a later visit doesn't resurrect a stale message.
++  useEffect(() => {
++    const { playlistAdded, playlistAddFailed } = location.state || {};
++    if (!playlistAdded && !playlistAddFailed) return;
++    setAddResult(playlistAddFailed ? { failed: true } : playlistAdded);
++    navigate(location.pathname + location.search, { replace: true, state: null });
++  }, [location, navigate]);
++
++  const openMusicPicker = () => {
++    const searchParams = createSearchParams({
++      isSelecting: true,
++      addToPlaylist: currentFolder,
++      returnTo: location.pathname,
++    });
++
++    navigate({ pathname: '/library', search: `?${searchParams}` });
++  };
++
++  const addResultMessage = () => {
++    if (!addResult || addResult.failed) return '';
++    const { added = 0, skipped = 0 } = addResult;
++    const parts = [];
++    if (added) parts.push(t('library.folders.add-result.added', { count: added }));
++    if (skipped) parts.push(t('library.folders.add-result.skipped', { count: skipped }));
++    return parts.length ? parts.join(' ') : t('library.folders.add-result.nothing');
++  };
++
+   const handleUploadSelection = (selection) => {
+     if (uploadSelectionHasEntries(selection)) setUploadSelection(selection);
+   };
+@@ -195,6 +233,17 @@ const Folders = ({
+       {isCollectionFolder &&
+         <Box sx={{ alignItems: 'center', display: 'flex', gap: 1, justifyContent: 'space-between', marginBottom: 1 }}>
+           <PlaylistBanner collectionKind={collectionKind} count={collectionCount} name={collectionName} />
++          {/* Playlists only: a podcast or radio folder is one URL, set when it's created. */}
++          {!isSelecting && collectionKind === 'playlist' &&
++            <Button
++              onClick={openMusicPicker}
++              size="small"
++              startIcon={<AddIcon fontSize="small" />}
++              variant="outlined"
++            >
++              {t('library.folders.manager.add-music')}
++            </Button>
++          }
+         </Box>
+       }
+       {!isSelecting && !isCollectionFolder &&
+@@ -223,6 +272,18 @@ const Folders = ({
+           {operationWarning}
+         </Alert>
+       }
++      {addResult &&
++        <Alert
++          onClose={() => setAddResult(null)}
++          severity={addResult.failed ? 'error' : (addResult.added ? 'success' : 'info')}
++          sx={{ marginBottom: 1 }}
++        >
++          {addResult.failed
++            ? t('library.folders.add-result.failed')
++            : addResultMessage()
++          }
++        </Alert>
++      }
+       {isLoading && <CircularProgress />}
+       {!isLoading && error &&
+         <Typography>{t('library.loading-error')}</Typography>
+diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
+index 3b48c7d..0c764b3 100644
+--- a/src/components/Library/lists/index.jsx
++++ b/src/components/Library/lists/index.jsx
+@@ -180,6 +180,10 @@ const LibraryLists = () => {
+   const [searchParams] = useSearchParams();
+   const [isSelecting] = useState(searchParams.get('isSelecting'));
+   const [cardId] = useState(searchParams.get('cardId'));
++  // Set when the picker was opened from a playlist's "add music" button: the playlist
++  // folder to append to, and the view to return to afterwards.
++  const [addToPlaylist] = useState(searchParams.get('addToPlaylist'));
++  const [returnTo] = useState(searchParams.get('returnTo'));
+   const [musicFilter, setMusicFilter] = useState('');
+   const [sources, setSources] = useState([LOCAL_SOURCE]);
+   const [isLoadingSources, setIsLoadingSources] = useState(true);
+@@ -214,9 +218,35 @@ const LibraryLists = () => {
+     navigate('/cards/register', { state });
+   };
+ 
++  // The picker emits the same play-command shapes the player uses; map them onto
++  // what add_to_playlist expects (it expands folders and albums into their songs).
++  const addMusicToPlaylist = async (command, args) => {
++    const { result, error } = await request('addToPlaylist', {
++      playlist_folder: addToPlaylist,
++      ...(command === 'play_single' && { song_url: args.song_url }),
++      ...(command === 'play_folder' && { folder: args.folder, recursive: args.recursive }),
++      ...(command === 'play_album' && { albumartist: args.albumartist, album: args.album }),
++    });
++
++    navigate(returnTo || '/library', {
++      state: error ? { playlistAddFailed: true } : { playlistAdded: result },
++    });
++  };
++
++  // Both modes share the picker; only what happens on selection differs.
++  const selectMusic = addToPlaylist ? addMusicToPlaylist : registerMusicToCard;
++
+   return (
+     <Grid container id="library">
+-      {isSelecting && <SelectorHeader />}
++      {isSelecting &&
++        <SelectorHeader
++          cancelTo={addToPlaylist ? (returnTo || '/library') : '/cards/register'}
++          titleKey={addToPlaylist
++            ? 'library.selector-header.add-to-playlist-title'
++            : 'library.selector-header.title'
++          }
++        />
++      }
+       <Grid container size={12} sx={{ padding: '10px' }}>
+         <LibraryHeader
+           handleMusicFilter={handleMusicFilter}
+@@ -262,7 +292,7 @@ const LibraryLists = () => {
+                   isLoadingSources={isLoadingSources}
+                   isSelecting={isSelecting}
+                   musicFilter={musicFilter}
+-                  registerMusicToCard={registerMusicToCard}
++                  registerMusicToCard={selectMusic}
+                   sources={sources}
+                 />
+               }
+@@ -273,7 +303,7 @@ const LibraryLists = () => {
+                 <LibraryItemView
+                   isLoadingSources={isLoadingSources}
+                   isSelecting={isSelecting}
+-                  registerMusicToCard={registerMusicToCard}
++                  registerMusicToCard={selectMusic}
+                   sources={sources}
+                 />
+               }
+diff --git a/src/components/Library/selector-header.jsx b/src/components/Library/selector-header.jsx
+index f44c0b5..ad9a23a 100644
+--- a/src/components/Library/selector-header.jsx
++++ b/src/components/Library/selector-header.jsx
+@@ -9,7 +9,10 @@ import {
+ import { useTheme } from '@mui/material/styles';
+ import { Link } from "react-router-dom";
+ 
+-const SelectorHeader = () => {
++const SelectorHeader = ({
++  cancelTo = '/cards/register',
++  titleKey = 'library.selector-header.title',
++}) => {
+   const { t } = useTranslation();
+   const theme = useTheme();
+ 
+@@ -30,12 +33,12 @@ const SelectorHeader = () => {
+         }}
+       >
+         <Typography>
+-          {t('library.selector-header.title')}
++          {t(titleKey)}
+         </Typography>
+         <Button
+           component={Link}
+           nativeButton={false}
+-          to={'/cards/register'}
++          to={cancelTo}
+           color="secondary"
+           size="small"
+           variant="contained"

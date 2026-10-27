@@ -39,6 +39,7 @@ buildNpmPackage {
     ../../patches/add-collection-entry-webapp.patch
     ../../patches/collection-view-metadata-webapp.patch
     ../../patches/card-labels-webapp.patch
+    ../../patches/add-to-playlist-webapp.patch
   ];
 
   env = {

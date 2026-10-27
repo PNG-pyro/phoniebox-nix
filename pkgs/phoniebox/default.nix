@@ -46,6 +46,7 @@ let
       ../../patches/add-collection-entry-daemon.patch
       ../../patches/collection-view-metadata-daemon.patch
       ../../patches/card-labels-daemon.patch
+      ../../patches/add-to-playlist-daemon.patch
     ];
   };
 
