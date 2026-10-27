@@ -200,21 +200,29 @@ index 960c5bf..9ba1e94 100644
        {!isLoading && error &&
          <Typography>{t('library.loading-error')}</Typography>
 diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
-index 3b48c7d..0c764b3 100644
+index 3b48c7d..9b383ef 100644
 --- a/src/components/Library/lists/index.jsx
 +++ b/src/components/Library/lists/index.jsx
-@@ -180,6 +180,10 @@ const LibraryLists = () => {
+@@ -178,8 +178,16 @@ const LegacyFolderRedirect = () => {
+ const LibraryLists = () => {
+   const navigate = useNavigate();
    const [searchParams] = useSearchParams();
-   const [isSelecting] = useState(searchParams.get('isSelecting'));
-   const [cardId] = useState(searchParams.get('cardId'));
+-  const [isSelecting] = useState(searchParams.get('isSelecting'));
+-  const [cardId] = useState(searchParams.get('cardId'));
++  // Read from the URL on every render rather than snapshotted into state: leaving the
++  // picker can navigate to another route under /library, which keeps this component
++  // mounted - a snapshot would stay in selection mode after the params are gone.
++  // Every in-picker link carries the search string along, so these survive browsing.
++  const isSelecting = searchParams.get('isSelecting');
++  const cardId = searchParams.get('cardId');
 +  // Set when the picker was opened from a playlist's "add music" button: the playlist
 +  // folder to append to, and the view to return to afterwards.
-+  const [addToPlaylist] = useState(searchParams.get('addToPlaylist'));
-+  const [returnTo] = useState(searchParams.get('returnTo'));
++  const addToPlaylist = searchParams.get('addToPlaylist');
++  const returnTo = searchParams.get('returnTo');
    const [musicFilter, setMusicFilter] = useState('');
    const [sources, setSources] = useState([LOCAL_SOURCE]);
    const [isLoadingSources, setIsLoadingSources] = useState(true);
-@@ -214,9 +218,35 @@ const LibraryLists = () => {
+@@ -214,9 +222,35 @@ const LibraryLists = () => {
      navigate('/cards/register', { state });
    };
  
@@ -251,7 +259,7 @@ index 3b48c7d..0c764b3 100644
        <Grid container size={12} sx={{ padding: '10px' }}>
          <LibraryHeader
            handleMusicFilter={handleMusicFilter}
-@@ -262,7 +292,7 @@ const LibraryLists = () => {
+@@ -262,7 +296,7 @@ const LibraryLists = () => {
                    isLoadingSources={isLoadingSources}
                    isSelecting={isSelecting}
                    musicFilter={musicFilter}
@@ -260,7 +268,7 @@ index 3b48c7d..0c764b3 100644
                    sources={sources}
                  />
                }
-@@ -273,7 +303,7 @@ const LibraryLists = () => {
+@@ -273,7 +307,7 @@ const LibraryLists = () => {
                  <LibraryItemView
                    isLoadingSources={isLoadingSources}
                    isSelecting={isSelecting}
