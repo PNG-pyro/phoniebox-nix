@@ -1,18 +1,29 @@
 diff --git a/public/locales/de/translation.json b/public/locales/de/translation.json
-index 09bed0f..03a3998 100644
+index 09bed0f..c921963 100644
 --- a/public/locales/de/translation.json
 +++ b/public/locales/de/translation.json
-@@ -151,7 +151,8 @@
+@@ -4,6 +4,7 @@
+       "cancel": "Abbrechen",
+       "close": "Schließen",
+       "delete": "Löschen",
++      "done": "Fertig",
+       "save": "Speichern"
+     },
+     "loading": "Wird geladen"
+@@ -151,7 +152,11 @@
        "show-all": "Alle anzeigen"
      },
      "selector-header": {
 -      "title": "Wähle ein Album, einen Ordner oder einen Song aus"
 +      "title": "Wähle ein Album, einen Ordner oder einen Song aus",
-+      "add-to-playlist-title": "Wähle ein Album, einen Ordner oder einen Song zum Hinzufügen aus"
++      "add-to-playlist-title": "Wähle ein Album, einen Ordner oder einen Song zum Hinzufügen aus",
++      "added_one": "{{count}} Titel hinzugefügt",
++      "added_other": "{{count}} Titel hinzugefügt",
++      "add-failed": "Hinzufügen fehlgeschlagen"
      },
      "folders": {
        "no-music": "☝️ Keine Musik vorhanden!",
-@@ -167,6 +168,14 @@
+@@ -167,6 +172,15 @@
        "podcast-banner_other": "Podcast: {{name}} ({{count}} Folgen)",
        "radio-banner_one": "Radio: {{name}} ({{count}} Sender)",
        "radio-banner_other": "Radio: {{name}} ({{count}} Sender)",
@@ -22,12 +33,13 @@ index 09bed0f..03a3998 100644
 +        "skipped_one": "{{count}} Titel war bereits in der Playlist.",
 +        "skipped_other": "{{count}} Titel waren bereits in der Playlist.",
 +        "nothing": "Es gab nichts hinzuzufügen.",
++        "partial-failure": "Einige Titel konnten nicht hinzugefügt werden.",
 +        "failed": "Die Titel konnten nicht zur Playlist hinzugefügt werden."
 +      },
        "manager": {
          "actions-label": "Aktionen für Bibliotheksdateien",
          "upload": "Hochladen",
-@@ -176,6 +185,7 @@
+@@ -176,6 +190,7 @@
          "create-playlist": "Neue Playlist",
          "create-podcast": "Neuer Podcast",
          "create-radio": "Neuer Radiosender",
@@ -35,21 +47,42 @@ index 09bed0f..03a3998 100644
          "select": "Auswählen",
          "select-item": "{{name}} auswählen",
          "delete-selected_one": "{{count}} Element löschen",
+@@ -251,7 +266,8 @@
+       "no-music": "Keine Musik vorhanden!",
+       "empty-library": "Deine Bibliothek ist noch leer!",
+       "no-songs-in-album": "Komisch, in diesem Album gibt es keine Songs.",
+-      "assign-to-card": "Dieses Album registrieren"
++      "assign-to-card": "Dieses Album registrieren",
++      "add-to-playlist": "Album zur Playlist hinzufügen"
+     }
+   },
+   "navigation": {
 diff --git a/public/locales/en/translation.json b/public/locales/en/translation.json
-index 8480f55..3110f2c 100644
+index 8480f55..9de1156 100644
 --- a/public/locales/en/translation.json
 +++ b/public/locales/en/translation.json
-@@ -151,7 +151,8 @@
+@@ -4,6 +4,7 @@
+       "cancel": "Cancel",
+       "close": "Close",
+       "delete": "Delete",
++      "done": "Done",
+       "save": "Save"
+     },
+     "loading": "Loading"
+@@ -151,7 +152,11 @@
        "show-all": "Show all"
      },
      "selector-header": {
 -      "title": "Select an album, folder or song"
 +      "title": "Select an album, folder or song",
-+      "add-to-playlist-title": "Select an album, folder or song to add"
++      "add-to-playlist-title": "Select an album, folder or song to add",
++      "added_one": "{{count}} track added",
++      "added_other": "{{count}} tracks added",
++      "add-failed": "adding failed"
      },
      "folders": {
        "no-music": "☝️ No music found!",
-@@ -167,6 +168,14 @@
+@@ -167,6 +172,15 @@
        "podcast-banner_other": "Podcast: {{name}} ({{count}} episodes)",
        "radio-banner_one": "Radio: {{name}} ({{count}} station)",
        "radio-banner_other": "Radio: {{name}} ({{count}} stations)",
@@ -59,12 +92,13 @@ index 8480f55..3110f2c 100644
 +        "skipped_one": "{{count}} track was already in the playlist.",
 +        "skipped_other": "{{count}} tracks were already in the playlist.",
 +        "nothing": "There was nothing to add.",
++        "partial-failure": "Some tracks could not be added.",
 +        "failed": "The tracks could not be added to the playlist."
 +      },
        "manager": {
          "actions-label": "Library file actions",
          "upload": "Upload",
-@@ -176,6 +185,7 @@
+@@ -176,6 +190,7 @@
          "create-playlist": "New playlist",
          "create-podcast": "New podcast",
          "create-radio": "New radio station",
@@ -72,6 +106,16 @@ index 8480f55..3110f2c 100644
          "select": "Select",
          "select-item": "Select {{name}}",
          "delete-selected_one": "Delete {{count}} item",
+@@ -251,7 +266,8 @@
+       "no-music": "No music found!",
+       "empty-library": "Your library is empty!",
+       "no-songs-in-album": "Strange, no songs in this album.",
+-      "assign-to-card": "Assign album to card"
++      "assign-to-card": "Assign album to card",
++      "add-to-playlist": "Add album to playlist"
+     }
+   },
+   "navigation": {
 diff --git a/src/commands/index.js b/src/commands/index.js
 index c2f40e9..caa08c5 100644
 --- a/src/commands/index.js
@@ -88,8 +132,40 @@ index c2f40e9..caa08c5 100644
    cardsList: {
      _package: 'cards',
      plugin: 'list_cards',
+diff --git a/src/components/Library/lists/albums/song-list/song-list-controls.jsx b/src/components/Library/lists/albums/song-list/song-list-controls.jsx
+index 763a890..7ccbb75 100644
+--- a/src/components/Library/lists/albums/song-list/song-list-controls.jsx
++++ b/src/components/Library/lists/albums/song-list/song-list-controls.jsx
+@@ -1,4 +1,5 @@
+ import { useTranslation } from 'react-i18next';
++import { useSearchParams } from 'react-router-dom';
+ 
+ import {
+   Button,
+@@ -19,6 +20,10 @@ const SongListControls = ({
+   provider,
+ }) => {
+   const { t } = useTranslation();
++  // The picker is shared between assigning to a card and adding to a playlist; read
++  // which one straight off the URL rather than threading a prop down three levels.
++  const [searchParams] = useSearchParams();
++  const isAddingToPlaylist = Boolean(searchParams.get('addToPlaylist'));
+   const command = 'play_album';
+ 
+   const playAlbum = () => (
+@@ -62,7 +67,9 @@ const SongListControls = ({
+                 onClick={registerAlbumToCard}
+                 sx={{ margin: '20px 0 4px' }}
+               >
+-                {t('library.albums.assign-to-card')}
++                {t(isAddingToPlaylist
++                  ? 'library.albums.add-to-playlist'
++                  : 'library.albums.assign-to-card')}
+               </Button>
+         }
+       </Grid>
 diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
-index 960c5bf..9ba1e94 100644
+index 960c5bf..45894ab 100644
 --- a/src/components/Library/lists/folders/index.jsx
 +++ b/src/components/Library/lists/folders/index.jsx
 @@ -3,15 +3,22 @@ import {
@@ -127,7 +203,7 @@ index 960c5bf..9ba1e94 100644
    const [folders, setFolders] = useState([]);
    const [expandedEntries, setExpandedEntries] = useState(null);
    const [error, setError] = useState(null);
-@@ -109,6 +119,34 @@ const Folders = ({
+@@ -109,6 +119,39 @@ const Folders = ({
      setReloadNumber((value) => value + 1);
    }, []);
  
@@ -151,18 +227,23 @@ index 960c5bf..9ba1e94 100644
 +  };
 +
 +  const addResultMessage = () => {
-+    if (!addResult || addResult.failed) return '';
-+    const { added = 0, skipped = 0 } = addResult;
++    if (!addResult) return '';
++    const { added = 0, skipped = 0, failed = false } = addResult;
++    // Everything failed: nothing useful to count, just say so.
++    if (failed && !added) return t('library.folders.add-result.failed');
++
 +    const parts = [];
 +    if (added) parts.push(t('library.folders.add-result.added', { count: added }));
 +    if (skipped) parts.push(t('library.folders.add-result.skipped', { count: skipped }));
++    // Partly failed: don't let the success count imply everything landed.
++    if (failed) parts.push(t('library.folders.add-result.partial-failure'));
 +    return parts.length ? parts.join(' ') : t('library.folders.add-result.nothing');
 +  };
 +
    const handleUploadSelection = (selection) => {
      if (uploadSelectionHasEntries(selection)) setUploadSelection(selection);
    };
-@@ -195,6 +233,17 @@ const Folders = ({
+@@ -195,6 +238,17 @@ const Folders = ({
        {isCollectionFolder &&
          <Box sx={{ alignItems: 'center', display: 'flex', gap: 1, justifyContent: 'space-between', marginBottom: 1 }}>
            <PlaylistBanner collectionKind={collectionKind} count={collectionCount} name={collectionName} />
@@ -180,30 +261,31 @@ index 960c5bf..9ba1e94 100644
          </Box>
        }
        {!isSelecting && !isCollectionFolder &&
-@@ -223,6 +272,18 @@ const Folders = ({
+@@ -223,6 +277,19 @@ const Folders = ({
            {operationWarning}
          </Alert>
        }
 +      {addResult &&
 +        <Alert
 +          onClose={() => setAddResult(null)}
-+          severity={addResult.failed ? 'error' : (addResult.added ? 'success' : 'info')}
++          severity={
++            addResult.failed
++              ? (addResult.added ? 'warning' : 'error')
++              : (addResult.added ? 'success' : 'info')
++          }
 +          sx={{ marginBottom: 1 }}
 +        >
-+          {addResult.failed
-+            ? t('library.folders.add-result.failed')
-+            : addResultMessage()
-+          }
++          {addResultMessage()}
 +        </Alert>
 +      }
        {isLoading && <CircularProgress />}
        {!isLoading && error &&
          <Typography>{t('library.loading-error')}</Typography>
 diff --git a/src/components/Library/lists/index.jsx b/src/components/Library/lists/index.jsx
-index 3b48c7d..9b383ef 100644
+index 3b48c7d..65bbc65 100644
 --- a/src/components/Library/lists/index.jsx
 +++ b/src/components/Library/lists/index.jsx
-@@ -178,8 +178,16 @@ const LegacyFolderRedirect = () => {
+@@ -178,11 +178,27 @@ const LegacyFolderRedirect = () => {
  const LibraryLists = () => {
    const navigate = useNavigate();
    const [searchParams] = useSearchParams();
@@ -222,12 +304,25 @@ index 3b48c7d..9b383ef 100644
    const [musicFilter, setMusicFilter] = useState('');
    const [sources, setSources] = useState([LOCAL_SOURCE]);
    const [isLoadingSources, setIsLoadingSources] = useState(true);
-@@ -214,9 +222,35 @@ const LibraryLists = () => {
++  const [addTally, setAddTally] = useState(null);
++
++  // This component stays mounted when the picker is left, so the tally has to be
++  // cleared explicitly - otherwise the next "add music" session starts with a
++  // leftover count from the previous one.
++  useEffect(() => {
++    setAddTally(null);
++  }, [addToPlaylist]);
+ 
+   useEffect(() => {
+     let isCurrent = true;
+@@ -214,9 +230,53 @@ const LibraryLists = () => {
      navigate('/cards/register', { state });
    };
  
 +  // The picker emits the same play-command shapes the player uses; map them onto
 +  // what add_to_playlist expects (it expands folders and albums into their songs).
++  // Adding keeps the picker open so several items can be added in one go; the running
++  // tally is handed to the playlist view when "Done" is pressed.
 +  const addMusicToPlaylist = async (command, args) => {
 +    const { result, error } = await request('addToPlaylist', {
 +      playlist_folder: addToPlaylist,
@@ -236,8 +331,15 @@ index 3b48c7d..9b383ef 100644
 +      ...(command === 'play_album' && { albumartist: args.albumartist, album: args.album }),
 +    });
 +
-+    navigate(returnTo || '/library', {
-+      state: error ? { playlistAddFailed: true } : { playlistAdded: result },
++    setAddTally((previous) => {
++      const { added = 0, skipped = 0, failed = false } = previous || {};
++      return error
++        ? { added, skipped, failed: true }
++        : {
++            added: added + (result?.added || 0),
++            skipped: skipped + (result?.skipped || 0),
++            failed,
++          };
 +    });
 +  };
 +
@@ -249,7 +351,16 @@ index 3b48c7d..9b383ef 100644
 -      {isSelecting && <SelectorHeader />}
 +      {isSelecting &&
 +        <SelectorHeader
-+          cancelTo={addToPlaylist ? (returnTo || '/library') : '/cards/register'}
++          addedCount={addToPlaylist ? (addTally?.added || 0) : 0}
++          failed={Boolean(addToPlaylist && addTally?.failed)}
++          exitTo={addToPlaylist ? (returnTo || '/library') : '/cards/register'}
++          // Adding to a playlist can be repeated, so the picker is left deliberately
++          // with "Done" rather than abandoned with "Cancel".
++          exitLabelKey={addToPlaylist ? 'general.buttons.done' : 'general.buttons.cancel'}
++          exitState={addToPlaylist && addTally
++            ? (addTally.failed ? { playlistAddFailed: true } : { playlistAdded: addTally })
++            : undefined
++          }
 +          titleKey={addToPlaylist
 +            ? 'library.selector-header.add-to-playlist-title'
 +            : 'library.selector-header.title'
@@ -259,7 +370,7 @@ index 3b48c7d..9b383ef 100644
        <Grid container size={12} sx={{ padding: '10px' }}>
          <LibraryHeader
            handleMusicFilter={handleMusicFilter}
-@@ -262,7 +296,7 @@ const LibraryLists = () => {
+@@ -262,7 +322,7 @@ const LibraryLists = () => {
                    isLoadingSources={isLoadingSources}
                    isSelecting={isSelecting}
                    musicFilter={musicFilter}
@@ -268,7 +379,7 @@ index 3b48c7d..9b383ef 100644
                    sources={sources}
                  />
                }
-@@ -273,7 +307,7 @@ const LibraryLists = () => {
+@@ -273,7 +333,7 @@ const LibraryLists = () => {
                  <LibraryItemView
                    isLoadingSources={isLoadingSources}
                    isSelecting={isSelecting}
@@ -278,33 +389,56 @@ index 3b48c7d..9b383ef 100644
                  />
                }
 diff --git a/src/components/Library/selector-header.jsx b/src/components/Library/selector-header.jsx
-index f44c0b5..ad9a23a 100644
+index f44c0b5..dc2c281 100644
 --- a/src/components/Library/selector-header.jsx
 +++ b/src/components/Library/selector-header.jsx
-@@ -9,7 +9,10 @@ import {
+@@ -9,7 +9,14 @@ import {
  import { useTheme } from '@mui/material/styles';
  import { Link } from "react-router-dom";
  
 -const SelectorHeader = () => {
 +const SelectorHeader = ({
-+  cancelTo = '/cards/register',
++  addedCount = 0,
++  failed = false,
++  exitTo = '/cards/register',
++  exitLabelKey = 'general.buttons.cancel',
++  exitState,
 +  titleKey = 'library.selector-header.title',
 +}) => {
    const { t } = useTranslation();
    const theme = useTheme();
  
-@@ -30,12 +33,12 @@ const SelectorHeader = () => {
+@@ -30,17 +37,30 @@ const SelectorHeader = () => {
          }}
        >
          <Typography>
 -          {t('library.selector-header.title')}
 +          {t(titleKey)}
++          {addedCount > 0 &&
++            <Typography component="span" sx={{ marginLeft: 1, opacity: 0.85 }}>
++              {`· ${t('library.selector-header.added', { count: addedCount })}`}
++            </Typography>
++          }
++          {/* Reported as it happens - otherwise a broken add looks like a working one
++              until "Done" is pressed, and you keep tapping into the void. */}
++          {failed &&
++            <Typography component="span" sx={{ marginLeft: 1 }}>
++              {`· ⚠️ ${t('library.selector-header.add-failed')}`}
++            </Typography>
++          }
          </Typography>
          <Button
            component={Link}
            nativeButton={false}
 -          to={'/cards/register'}
-+          to={cancelTo}
++          to={exitTo}
++          state={exitState}
            color="secondary"
            size="small"
            variant="contained"
+         >
+-          {t('general.buttons.cancel')}
++          {t(exitLabelKey)}
+         </Button>
+       </Grid>
+     </Grid>
