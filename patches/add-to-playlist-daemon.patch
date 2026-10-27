@@ -168,3 +168,27 @@ index a021580..53597da 100644
      @plugs.tag
      def play_folder(self, folder: str, recursive: bool = False) -> None:
          """
+diff --git a/src/jukebox/components/player/coordinator.py b/src/jukebox/components/player/coordinator.py
+index e74da45..7076522 100644
+--- a/src/jukebox/components/player/coordinator.py
++++ b/src/jukebox/components/player/coordinator.py
+@@ -256,6 +256,19 @@ class PlayerCoordinator:
+     def get_folder_content(self, folder: str):
+         return self._call_default('get_folder_content', folder)
+ 
++    @plugs.tag
++    def add_to_playlist(self, playlist_folder: str, song_url=None, folder=None,
++                        albumartist=None, album=None, recursive=True):
++        return self._call_default(
++            'add_to_playlist',
++            playlist_folder,
++            song_url=song_url,
++            folder=folder,
++            albumartist=albumartist,
++            album=album,
++            recursive=recursive,
++        )
++
+     @plugs.tag
+     def play_folder(self, folder: str, recursive: bool = False) -> None:
+         with self._lock:
