@@ -314,15 +314,32 @@ in
       };
     };
 
+    extraFeatures.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Enable the develop-branch library/card extras beyond plain upstream (playlists,
+        podcasts, radio, collection metadata, card labels, ...). Hardware fixes (e.g. the
+        PN532 reader patch) always apply regardless of this setting. Off gives you a
+        closer-to-upstream `develop` web app and daemon.
+      '';
+    };
+
     webappPackage = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.callPackage ../pkgs/phoniebox-webapp { phoniebox = cfg.package; };
+      default = pkgs.callPackage ../pkgs/phoniebox-webapp {
+        phoniebox = cfg.package;
+        enableExtraFeatures = cfg.extraFeatures.enable;
+      };
       description = "The built web app. Architecture-independent, so an x86-built copy works on any board.";
     };
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.callPackage ../pkgs/phoniebox { readers = readerModules; };
+      default = pkgs.callPackage ../pkgs/phoniebox {
+        readers = readerModules;
+        enableExtraFeatures = cfg.extraFeatures.enable;
+      };
     };
 
     settings = lib.mkOption {

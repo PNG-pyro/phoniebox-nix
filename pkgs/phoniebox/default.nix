@@ -8,6 +8,10 @@
   zeromq,
   lib,
   readers ? [ "generic_nfcpy" ],
+  # Turns off everything beyond the reader fix - the develop-branch library/card
+  # features that aren't plain upstream. On by default so existing deployments
+  # (and the flake's own package outputs) are unaffected.
+  enableExtraFeatures ? true,
 }:
 
 let
@@ -34,6 +38,7 @@ let
     };
     patches = [
       ../../patches/reader.patch
+    ] ++ lib.optionals enableExtraFeatures [
       ../../patches/playlists-view-daemon.patch
       ../../patches/podcasts-view-daemon.patch
       ../../patches/hide-dotfiles-in-collections.patch

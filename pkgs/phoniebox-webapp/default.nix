@@ -3,6 +3,9 @@
   nodejs_22,
   phoniebox,
   lib,
+  # See pkgs/phoniebox's enableExtraFeatures - same switch, kept independent here
+  # since the webapp is built/consumed separately.
+  enableExtraFeatures ? true,
 }:
 
 buildNpmPackage {
@@ -15,8 +18,9 @@ buildNpmPackage {
 
   npmDepsHash = "sha256-ewiwTnesYolBWgtAa6pVTUi9PlJA/HymfaiIlURWey0="; # first build prints the real one
 
-  # Web app patches go here later (paths relative to src/webapp)
-  patches = [
+  # Web app patches (paths relative to src/webapp) - all of these are the develop-branch
+  # library/card extras, none are upstream bug/hardware fixes, so the whole list is gated.
+  patches = lib.optionals enableExtraFeatures [
     ../../patches/scroll-memory.patch
     ../../patches/lazy-covers.patch
     ../../patches/floating-back-button.patch
