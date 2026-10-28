@@ -4,7 +4,7 @@
   fetchzip,
   applyPatches,
   makeWrapper,
-  python3,
+  callPackage,
   zeromq,
   lib,
   readers ? [ "generic_nfcpy" ],
@@ -18,8 +18,6 @@ let
 
   rev = "0d9d70fdf44a53c42ff3617d14ae7e5d1fdba9ac"; # your existing pin
   upstreamVersion = "3.6.0";
-
-  zeromqDrafts = zeromq.override { enableDrafts = true; };
 
   readerDeps = p: {
     generic_nfcpy = [ p.nfcpy ];
@@ -51,21 +49,7 @@ let
     ];
   };
 
-  isCross = python3.stdenv.buildPlatform != python3.stdenv.hostPlatform;
-
-  python = python3.override {
-    packageOverrides =
-      self: super:
-      lib.optionalAttrs isCross {
-        # CMake >= 4.1 (policy CMP0190) refuses to find the target's Python when
-        # cross-compiling; pyzmq's build asks for it. Restore the old behaviour.
-        pyzmq = super.pyzmq.overridePythonAttrs (old: {
-          env = (old.env or { }) // {
-            CMAKE_ARGS = "-DCMAKE_POLICY_DEFAULT_CMP0190=OLD";
-          };
-        });
-      };
-  };
+  python = callPackage ../shared/python.nix { };
 
   py = python.withPackages (
     p:

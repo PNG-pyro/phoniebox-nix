@@ -1,10 +1,11 @@
 {
   stdenvNoCC,
   makeWrapper,
-  python3,
+  callPackage,
 }:
 let
-  py = python3.withPackages (p: [
+  python = callPackage ../shared/python.nix { };
+  py = python.withPackages (p: [
     (p.callPackage ../luma-oled { })
     p.pyzmq
     p.pillow
