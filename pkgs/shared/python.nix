@@ -21,7 +21,12 @@ let
         # it, so give CMake an emulator to run the real target Python with.
         pyzmq = super.pyzmq.overridePythonAttrs (old: {
           env = (old.env or { }) // {
-            CMAKE_ARGS = "-DCMAKE_CROSSCOMPILING_EMULATOR=${emulator}";
+            CMAKE_ARGS = lib.concatStringsSep " " [
+              "-DCMAKE_CROSSCOMPILING_EMULATOR=${emulator}"
+              # Point FindPython at the target's Python instead of letting it find the build machine's
+              "-DPython_EXECUTABLE=${python3}/bin/python3"
+              "-DPython_INCLUDE_DIR=${python3}/include/python${python3.pythonVersion}"
+            ];
           };
         });
       };
