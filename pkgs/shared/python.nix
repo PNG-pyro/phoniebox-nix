@@ -22,10 +22,12 @@ let
         pyzmq = super.pyzmq.overridePythonAttrs (old: {
           env = (old.env or { }) // {
             CMAKE_ARGS = lib.concatStringsSep " " [
-              "-DCMAKE_CROSSCOMPILING_EMULATOR=${emulator}"
-              # Point FindPython at the target's Python instead of letting it find the build machine's
-              "-DPython_EXECUTABLE=${python3}/bin/python3"
+
+              "-DCMAKE_CROSSCOMPILING_EMULATOR=${buildPackages.coreutils}/bin/env"
+              "-DPython_EXECUTABLE=${python3.pythonOnBuildForHost.interpreter}"
+              # Headers must be the target's, not the build machine's
               "-DPython_INCLUDE_DIR=${python3}/include/python${python3.pythonVersion}"
+
             ];
           };
         });
