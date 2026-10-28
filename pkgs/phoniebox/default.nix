@@ -38,7 +38,8 @@ let
     };
     patches = [
       ../../patches/reader.patch
-    ] ++ lib.optionals enableExtraFeatures [
+    ]
+    ++ lib.optionals enableExtraFeatures [
       ../../patches/playlists-view-daemon.patch
       ../../patches/podcasts-view-daemon.patch
       ../../patches/hide-dotfiles-in-collections.patch
@@ -50,7 +51,23 @@ let
     ];
   };
 
-  py = python3.withPackages (
+  isCross = python3.stdenv.buildPlatform != python3.stdenv.hostPlatform;
+
+  python = python3.override {
+    packageOverrides =
+      self: super:
+      lib.optionalAttrs isCross {
+        # CMake >= 4.1 (policy CMP0190) refuses to find the target's Python when
+        # cross-compiling; pyzmq's build asks for it. Restore the old behaviour.
+        pyzmq = super.pyzmq.overridePythonAttrs (old: {
+          env = (old.env or { }) // {
+            CMAKE_ARGS = "-DCMAKE_POLICY_DEFAULT_CMP0190=OLD";
+          };
+        });
+      };
+  };
+
+  py = python.withPackages (
     p:
     with p;
     [
