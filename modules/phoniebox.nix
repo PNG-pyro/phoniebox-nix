@@ -163,6 +163,70 @@ let
 
   loginDir = "${cfg.stateDir}/login";
 
+  # The routes, shared verbatim by the HTTP and (optional) HTTPS listeners
+  caddySite =
+    lib.optionalString cfg.login.enable ''
+      @phoniebox_protected not path /captive-portal/*
+      import ${loginDir}/*.caddy
+    ''
+    + lib.optionalString h.enable ''
+      @captive {
+        remote_ip ${hotspotPrefix}.0/24
+        not host ${h.address}
+      }
+      redir @captive http://${h.address}/ 302
+
+      handle /captive-portal/api {
+        header Content-Type application/captive+json
+        respond `{"captive": true, "user-portal-url": "http://${h.address}/"}` 200
+      }
+    ''
+    + ''
+      handle_path /cover-cache/* {
+        root * ${S}/shared/cover-cache
+        file_server
+      }
+      handle_path /logs/* {
+        root * ${S}/shared/logs
+        file_server browse
+      }
+      handle /api/* {
+        reverse_proxy localhost:5556
+      }
+    ''
+    # Only route /upload when something is actually listening there; otherwise
+    # the web app's upload link gets a 502 from a dead proxy instead of a 404.
+    + lib.optionalString cfg.copyparty.enable ''
+      handle /upload* {
+        reverse_proxy localhost:${toString cfg.copyparty.port}
+      }
+    ''
+    + ''
+      handle {
+        root * ${cfg.webappPackage}
+        file_server
+      }
+    '';
+
+  # A certificate has to be issued for a name, so unlike the HTTP listener the HTTPS
+  # one is per-hostname; reaching the box by any other name gives a mismatch warning.
+  tlsHostNames =
+    if cfg.tls.hostNames != [ ] then cfg.tls.hostNames else [ config.networking.fqdnOrHostName ];
+
+  tlsSiteAddresses = map (name: "https://${name}:${toString cfg.tls.port}") tlsHostNames;
+
+  # Both halves checked, not just certFile: with only one set this would otherwise
+  # fail with a null coercion error before the assertion below can explain why.
+  tlsDirective =
+    if cfg.tls.certFile != null && cfg.tls.keyFile != null then
+      ''
+        tls ${cfg.tls.certFile} ${cfg.tls.keyFile}
+      ''
+    else
+      ''
+        tls internal
+      '';
+
   # `sudo phoniebox-set-password` sets or changes the web login; `--off` removes it
   setPassword = pkgs.writeShellApplication {
     name = "phoniebox-set-password";
@@ -245,6 +309,51 @@ in
     webPort = lib.mkOption {
       type = lib.types.port;
       default = 80;
+    };
+
+    tls = {
+      enable = lib.mkEnableOption ''
+        HTTPS alongside plain HTTP. Mainly useful for uploads: browsers only expose
+        `crypto.subtle` in a secure context, so over HTTP copyparty falls back to
+        hashing with WebAssembly instead of the browser's native SHA-512, which is
+        markedly slower for big files. HTTP on `webPort` is left serving everything
+        and is not redirected, since the captive portal must stay plaintext
+      '';
+
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 443;
+      };
+
+      hostNames = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [ "jukebox.lan" ];
+        description = ''
+          Names to issue the certificate for. Clients must reach the box by one of
+          these or the browser reports a name mismatch. Defaults to the machine's
+          own FQDN (or hostname) when left empty.
+        '';
+      };
+
+      certFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = ''
+          Certificate to serve instead of one from Caddy's internal CA; set together
+          with `keyFile`. Left unset, Caddy issues its own, which browsers distrust
+          until its root CA is installed on them - find it on the box at
+          `/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt`.
+          Note that clicking through the warning is enough for `crypto.subtle`, so
+          installing the root is about silencing the warning, not about speed.
+        '';
+      };
+
+      keyFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Private key matching `certFile`.";
+      };
     };
 
     login = {
@@ -481,9 +590,19 @@ in
           };
         };
 
-        networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall ([
-          cfg.webPort
-        ]);
+        assertions = [
+          {
+            assertion = (cfg.tls.certFile == null) == (cfg.tls.keyFile == null);
+            message = "services.phoniebox.tls.certFile and keyFile must be set together.";
+          }
+        ];
+
+        networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall (
+          [
+            cfg.webPort
+          ]
+          ++ lib.optional cfg.tls.enable cfg.tls.port
+        );
 
         security.sudo.extraRules = [
           {
@@ -568,49 +687,21 @@ in
 
         services.caddy = {
           enable = true;
-          virtualHosts.":${toString cfg.webPort}".extraConfig =
-            lib.optionalString cfg.login.enable ''
-              @phoniebox_protected not path /captive-portal/*
-              import ${loginDir}/*.caddy
-            ''
-            + lib.optionalString h.enable ''
-              @captive {
-                remote_ip ${hotspotPrefix}.0/24
-                not host ${h.address}
-              }
-              redir @captive http://${h.address}/ 302
-
-              handle /captive-portal/api {
-                header Content-Type application/captive+json
-                respond `{"captive": true, "user-portal-url": "http://${h.address}/"}` 200
-              }
-            ''
-            + ''
-              handle_path /cover-cache/* {
-                root * ${S}/shared/cover-cache
-                file_server
-              }
-              handle_path /logs/* {
-                root * ${S}/shared/logs
-                file_server browse
-              }
-              handle /api/* {
-                reverse_proxy localhost:5556
-              }
-            ''
-            # Only route /upload when something is actually listening there; otherwise
-            # the web app's upload link gets a 502 from a dead proxy instead of a 404.
-            + lib.optionalString cfg.copyparty.enable ''
-              handle /upload* {
-                reverse_proxy localhost:${toString cfg.copyparty.port}
-              }
-            ''
-            + ''
-              handle {
-                root * ${cfg.webappPackage}
-                file_server
-              }
-            '';
+          virtualHosts =
+            {
+              # Plain HTTP keeps serving everything on every hostname. Deliberately not
+              # redirected to HTTPS: the captive portal has to stay plaintext, and the
+              # internal CA certificate isn't trusted until it's installed on a client.
+              ":${toString cfg.webPort}".extraConfig = caddySite;
+            }
+            // lib.optionalAttrs cfg.tls.enable (
+              lib.listToAttrs [
+                (lib.nameValuePair (lib.head tlsSiteAddresses) {
+                  serverAliases = lib.tail tlsSiteAddresses;
+                  extraConfig = tlsDirective + caddySite;
+                })
+              ]
+            );
         };
 
       }
