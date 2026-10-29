@@ -53,6 +53,14 @@ let
     ) cfg.readers;
   };
 
+  # copyparty is the upload path, but it knows nothing about MPD - without this the
+  # daemon never rescans and uploaded music stays invisible in the web app. The API
+  # is loopback-only, so no login is involved even when login.enable is set.
+  copypartyRefreshHook = pkgs.writeShellScript "phoniebox-library-refresh" ''
+    exec ${pkgs.curl}/bin/curl -fsS -m 30 -X POST \
+      http://127.0.0.1:5556/api/v1/library/refresh > /dev/null
+  '';
+
   copypartyConf = pkgs.writeText "copyparty.conf" ''
     [global]
       hist: ${cfg.stateDir}/copyparty-hist
@@ -69,6 +77,10 @@ let
       ${S}/shared/audiofolders/Music
       accs:
         rwmd: *
+      flags:
+        # Fire once the volume has been idle a few seconds, so dropping 200 files
+        # triggers one rescan rather than 200. f = don't block the upload on it.
+        xiu: f,i5,${copypartyRefreshHook}
   '';
 
   evdevFile = settingsFormat.generate "evdev.yaml" {
@@ -583,9 +595,15 @@ in
               handle /api/* {
                 reverse_proxy localhost:5556
               }
+            ''
+            # Only route /upload when something is actually listening there; otherwise
+            # the web app's upload link gets a 502 from a dead proxy instead of a 404.
+            + lib.optionalString cfg.copyparty.enable ''
               handle /upload* {
                 reverse_proxy localhost:${toString cfg.copyparty.port}
               }
+            ''
+            + ''
               handle {
                 root * ${cfg.webappPackage}
                 file_server

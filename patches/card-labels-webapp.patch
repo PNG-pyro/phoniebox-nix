@@ -46,6 +46,18 @@ index 0698370..9694a3c 100644
        overwrite: true,
        ...(args.length && { args }),
      };
+diff --git a/src/components/Cards/controls/actions-controls.test.jsx b/src/components/Cards/controls/actions-controls.test.jsx
+index 53f1e54..4d244d1 100644
+--- a/src/components/Cards/controls/actions-controls.test.jsx
++++ b/src/components/Cards/controls/actions-controls.test.jsx
+@@ -50,6 +50,7 @@ test('saving a legacy timer card submits restart=true', async () => {
+     expect(request).toHaveBeenCalledWith('registerCard', {
+       card_id: '123',
+       cmd_alias: 'timer_shutdown',
++      label: '',
+       overwrite: true,
+       args: [300, true],
+     });
 diff --git a/src/components/Cards/edit.jsx b/src/components/Cards/edit.jsx
 index 1811033..6108e72 100644
 --- a/src/components/Cards/edit.jsx

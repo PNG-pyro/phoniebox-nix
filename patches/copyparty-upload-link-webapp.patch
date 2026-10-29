@@ -1,0 +1,375 @@
+diff --git a/src/components/Library/lists/folders/index.jsx b/src/components/Library/lists/folders/index.jsx
+index 45894ab..583fc61 100644
+--- a/src/components/Library/lists/folders/index.jsx
++++ b/src/components/Library/lists/folders/index.jsx
+@@ -29,16 +29,9 @@ import DeleteEntriesDialog from './delete-entries-dialog';
+ import FolderList from "./folder-list";
+ import LibraryActions from './library-actions';
+ import PlaylistBanner from './playlist-banner';
+-import UploadDialog from './upload-dialog';
+-import {
+-  uploadSelectionFromDataTransfer,
+-  uploadSelectionHasEntries,
+-} from './upload-selection';
+ 
+ import { ROOT_DIR } from '../../../../config';
+ 
+-const emptyUploadSelection = { files: [], folders: [] };
+-
+ const Folders = ({
+   collectionKind,
+   musicFilter,
+@@ -62,8 +55,6 @@ const Folders = ({
+   const [operationWarning, setOperationWarning] = useState('');
+   const [isManagementSelecting, setIsManagementSelecting] = useState(false);
+   const [selectedPaths, setSelectedPaths] = useState(new Set());
+-  const [uploadSelection, setUploadSelection] = useState(emptyUploadSelection);
+-  const [isDragging, setIsDragging] = useState(false);
+   const currentFolder = decodeURIComponent(dir);
+ 
+   const scrollRef = useScrollMemory(`library-folders-scroll:${provider}:${view}:${dir}`, !isLoading);
+@@ -152,10 +143,6 @@ const Folders = ({
+     return parts.length ? parts.join(' ') : t('library.folders.add-result.nothing');
+   };
+ 
+-  const handleUploadSelection = (selection) => {
+-    if (uploadSelectionHasEntries(selection)) setUploadSelection(selection);
+-  };
+-
+   const toggleSelected = ({ relpath }) => {
+     setSelectedPaths((paths) => {
+       const nextPaths = new Set(paths);
+@@ -190,19 +177,6 @@ const Folders = ({
+     reloadFolder();
+   };
+ 
+-  const handleDrop = async (event) => {
+-    event.preventDefault();
+-    setIsDragging(false);
+-    try {
+-      handleUploadSelection(
+-        await uploadSelectionFromDataTransfer(event.dataTransfer),
+-      );
+-    }
+-    catch {
+-      setOperationWarning(t('library.folders.manager.read-folder-error'));
+-    }
+-  };
+-
+   const isCollectionFolder = expandedEntries !== null;
+   const filteredFolders = (isCollectionFolder ? expandedEntries : folders).filter(search);
+   const collectionName = currentFolder.split('/').filter(Boolean).pop() || currentFolder;
+@@ -212,25 +186,8 @@ const Folders = ({
+ 
+   return (
+     <Box
+-      onDragEnter={(event) => {
+-        if (isSelecting || collection || isCollectionFolder) return;
+-        event.preventDefault();
+-        setIsDragging(true);
+-      }}
+-      onDragLeave={(event) => {
+-        if (event.currentTarget === event.target) setIsDragging(false);
+-      }}
+-      onDragOver={(event) => {
+-        if (!isSelecting && !collection && !isCollectionFolder) event.preventDefault();
+-      }}
+-      onDrop={(event) => {
+-        if (!isSelecting && !collection && !isCollectionFolder) handleDrop(event);
+-      }}
+       sx={{
+         minWidth: 0,
+-        outline: isDragging ? '2px dashed' : '2px solid transparent',
+-        outlineColor: isDragging ? 'primary.main' : 'transparent',
+-        outlineOffset: 4,
+         width: '100%',
+       }}
+     >
+@@ -254,20 +211,15 @@ const Folders = ({
+       {!isSelecting && !isCollectionFolder &&
+         <LibraryActions
+           collectionKind={collectionKind}
++          folder={currentFolder}
+           isSelecting={isManagementSelecting}
+           onCancelSelection={cancelSelection}
+           onCreateFolder={() => setCreateDialogOpen(true)}
+           onDeleteSelected={deleteSelected}
+           onStartSelection={() => setIsManagementSelecting(true)}
+-          onUploadSelected={handleUploadSelection}
+           selectedCount={selectedPaths.size}
+         />
+       }
+-      {isDragging &&
+-        <Alert severity="info" sx={{ marginBottom: 1 }}>
+-          {t('library.folders.manager.drop-files')}
+-        </Alert>
+-      }
+       {operationWarning &&
+         <Alert
+           onClose={() => setOperationWarning('')}
+@@ -324,13 +276,6 @@ const Folders = ({
+         onDeleted={deletionCompleted}
+         open={deleteEntries.length > 0}
+       />
+-      <UploadDialog
+-        folder={currentFolder}
+-        onClose={() => setUploadSelection(emptyUploadSelection)}
+-        onLibraryChanged={reloadFolder}
+-        open={uploadSelectionHasEntries(uploadSelection)}
+-        selection={uploadSelection}
+-      />
+     </Box>
+   );
+ };
+diff --git a/src/components/Library/lists/folders/index.test.jsx b/src/components/Library/lists/folders/index.test.jsx
+index 6b179c3..ced5e62 100644
+--- a/src/components/Library/lists/folders/index.test.jsx
++++ b/src/components/Library/lists/folders/index.test.jsx
+@@ -1,6 +1,5 @@
+ import {
+   act,
+-  fireEvent,
+   render,
+   screen,
+   waitFor,
+@@ -21,7 +20,6 @@ import {
+   deleteLibraryEntries,
+   listLibraryEntries,
+   refreshLibrary,
+-  uploadLibraryFile,
+ } from '../../../../utils/library-api';
+ import Folders from './index';
+ 
+@@ -48,20 +46,9 @@ vi.mock('react-i18next', () => ({
+         'library.folders.manager.delete.permanent': 'Deletion is permanent.',
+         'library.folders.manager.delete.folder-warning': 'Folder contents will be deleted.',
+         'library.folders.manager.delete.title': `Delete ${options.count} items?`,
+-        'library.folders.manager.drop-files': 'Drop files here.',
+         'library.folders.manager.select': 'Select',
+         'library.folders.manager.select-item': `Select ${options.name}`,
+         'library.folders.manager.upload': 'Upload',
+-        'library.folders.manager.upload-files': 'Upload files',
+-        'library.folders.manager.upload-folders': 'Upload folders',
+-        'library.folders.manager.upload-dialog.cancel-all': 'Cancel all',
+-        'library.folders.manager.upload-dialog.cancel-item': 'Cancel',
+-        'library.folders.manager.upload-dialog.progress': `Progress ${options.name}`,
+-        'library.folders.manager.upload-dialog.retry-item': 'Retry',
+-        'library.folders.manager.upload-dialog.status.complete': 'Uploaded',
+-        'library.folders.manager.upload-dialog.status.queued': 'Waiting',
+-        'library.folders.manager.upload-dialog.title': 'Upload files and folders',
+-        'library.folders.manager.upload-dialog.uploading': `Uploading ${options.progress}%`,
+         'library.folders.show-folder-content': 'Show folder content',
+       };
+       return labels[key] || key;
+@@ -104,7 +91,6 @@ describe('responsive library file management', () => {
+     listLibraryEntries.mockResolvedValue(entries);
+     deleteLibraryEntries.mockResolvedValue({ deleted: ['Album'] });
+     refreshLibrary.mockResolvedValue({ update_id: '1' });
+-    uploadLibraryFile.mockResolvedValue({ path: 'track.mp3', size: 5 });
+   });
+ 
+   afterEach(() => {
+@@ -116,15 +102,9 @@ describe('responsive library file management', () => {
+     renderFolders();
+ 
+     expect(await screen.findByRole('toolbar', { name: 'Library file actions' })).toBeVisible();
+-    await user.click(screen.getByRole('button', { name: 'Upload' }));
+-    expect(screen.getByRole('menuitem', { name: 'Upload files' })).toBeVisible();
+-    expect(screen.getByRole('menuitem', { name: 'Upload folders' })).toBeVisible();
+-    await user.keyboard('{Escape}');
+-    const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
+-    expect(fileInputs).toHaveLength(2);
+-    const folderInput = fileInputs.find((input) => input.hasAttribute('webkitdirectory'));
+-    expect(folderInput).toHaveAttribute('multiple');
+-    expect(folderInput).toHaveAttribute('webkitdirectory');
++    // Uploading is handed off to copyparty; no in-app file inputs remain.
++    expect(screen.getByRole('link', { name: 'Upload' })).toHaveAttribute('href', '/upload/music/');
++    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(0);
+     expect(screen.getByRole('button', { name: 'New folder' })).toBeVisible();
+     expect(screen.queryByRole('button', { name: 'Delete Album' })).not.toBeInTheDocument();
+ 
+@@ -152,29 +132,4 @@ describe('responsive library file management', () => {
+     });
+   });
+ 
+-  test('supports drag and drop uploads and refreshes the library after the batch', async () => {
+-    const { container } = renderFolders();
+-    await screen.findByRole('toolbar', { name: 'Library file actions' });
+-    const dropTarget = container.firstChild;
+-    const file = new File(['audio'], 'new track.mp3', { type: 'audio/mpeg' });
+-
+-    await act(async () => {
+-      fireEvent.drop(dropTarget, {
+-        dataTransfer: { files: [file] },
+-      });
+-      await Promise.resolve();
+-      await Promise.resolve();
+-    });
+-
+-    expect(await screen.findByRole('dialog', { name: 'Upload files and folders' })).toBeVisible();
+-    await waitFor(() => expect(uploadLibraryFile).toHaveBeenCalledWith(
+-      expect.objectContaining({
+-        file,
+-        folder: '.',
+-      }),
+-    ));
+-    await waitFor(() => expect(refreshLibrary).toHaveBeenCalled());
+-    expect(await screen.findByText('Uploaded')).toBeVisible();
+-    await waitFor(() => expect(listLibraryEntries).toHaveBeenCalledTimes(2));
+-  });
+ });
+diff --git a/src/components/Library/lists/folders/library-actions.jsx b/src/components/Library/lists/folders/library-actions.jsx
+index 4cfcc47..b6b0c84 100644
+--- a/src/components/Library/lists/folders/library-actions.jsx
++++ b/src/components/Library/lists/folders/library-actions.jsx
+@@ -1,70 +1,51 @@
+-import {
+-  useRef,
+-  useState,
+-} from 'react';
+ import { useTranslation } from 'react-i18next';
+ 
+ import {
+   Box,
+   Button,
+-  ListItemIcon,
+-  ListItemText,
+-  Menu,
+-  MenuItem,
+ } from '@mui/material';
+ 
+-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+ import CheckBoxIcon from '@mui/icons-material/CheckBox';
+ import CloseIcon from '@mui/icons-material/Close';
+ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+ import DeleteIcon from '@mui/icons-material/Delete';
+-import DriveFolderUploadIcon from '@mui/icons-material/DriveFolderUpload';
+ import UploadFileIcon from '@mui/icons-material/UploadFile';
+ 
+-import { ACCEPTED_LIBRARY_FILES } from '../../../../utils/library-api';
+ import COLLECTION_KINDS from './collection-kinds';
+-import { createUploadSelection } from './upload-selection';
+ 
+ const actionButtonSx = {
+   minHeight: 44,
+   minWidth: 44,
+ };
+ 
++// Uploads are handled by copyparty, which Caddy serves at /upload with the music
++// folder as its one volume (/music). Deep-link into whichever folder is being
++// browsed, so "Upload" lands where the user already is.
++const COPYPARTY_MUSIC_URL = '/upload/music/';
++const MUSIC_ROOT = 'Music';
++
++const uploadUrlFor = (folder) => {
++  const parts = (folder || '').split('/').filter((part) => part && part !== '.');
++  if (parts[0] !== MUSIC_ROOT) return COPYPARTY_MUSIC_URL;
++  const rest = parts.slice(1).map(encodeURIComponent);
++  return rest.length
++    ? `${COPYPARTY_MUSIC_URL}${rest.join('/')}/`
++    : COPYPARTY_MUSIC_URL;
++};
++
+ const LibraryActions = ({
+   collectionKind,
++  folder,
+   isSelecting,
+   selectedCount,
+   onCancelSelection,
+   onCreateFolder,
+   onDeleteSelected,
+   onStartSelection,
+-  onUploadSelected,
+ }) => {
+   const { t } = useTranslation();
+   const collection = COLLECTION_KINDS[collectionKind];
+   const CreateIcon = collection?.icon;
+-  const [uploadMenuAnchor, setUploadMenuAnchor] = useState(null);
+-  const fileInput = useRef(null);
+-  const folderInput = useRef(null);
+-
+-  const closeUploadMenu = () => setUploadMenuAnchor(null);
+-
+-  const openPicker = (input) => {
+-    closeUploadMenu();
+-    input.current?.click();
+-  };
+-
+-  const selectFiles = (event) => {
+-    const files = Array.from(event.target.files || []);
+-    event.target.value = '';
+-    if (files.length) onUploadSelected(createUploadSelection(files));
+-  };
+-
+-  const selectFolders = (event) => {
+-    const files = Array.from(event.target.files || []);
+-    event.target.value = '';
+-    if (files.length) onUploadSelected(createUploadSelection(files));
+-  };
+ 
+   return (
+     <Box
+@@ -105,52 +86,17 @@ const LibraryActions = ({
+           </>
+         : <>
+             {!collection &&
+-              <>
+-                <Button
+-                  aria-controls={uploadMenuAnchor ? 'library-upload-menu' : undefined}
+-                  aria-expanded={Boolean(uploadMenuAnchor)}
+-                  aria-haspopup="menu"
+-                  endIcon={<ArrowDropDownIcon />}
+-                  onClick={(event) => setUploadMenuAnchor(event.currentTarget)}
+-                  startIcon={<UploadFileIcon />}
+-                  sx={actionButtonSx}
+-                  variant="contained"
+-                >
+-                  {t('library.folders.manager.upload')}
+-                </Button>
+-                <Menu
+-                  anchorEl={uploadMenuAnchor}
+-                  id="library-upload-menu"
+-                  onClose={closeUploadMenu}
+-                  open={Boolean(uploadMenuAnchor)}
+-                >
+-                  <MenuItem onClick={() => openPicker(fileInput)} sx={{ minHeight: 44 }}>
+-                    <ListItemIcon><UploadFileIcon /></ListItemIcon>
+-                    <ListItemText>{t('library.folders.manager.upload-files')}</ListItemText>
+-                  </MenuItem>
+-                  <MenuItem onClick={() => openPicker(folderInput)} sx={{ minHeight: 44 }}>
+-                    <ListItemIcon><DriveFolderUploadIcon /></ListItemIcon>
+-                    <ListItemText>{t('library.folders.manager.upload-folders')}</ListItemText>
+-                  </MenuItem>
+-                </Menu>
+-                <input
+-                  accept={ACCEPTED_LIBRARY_FILES}
+-                  hidden
+-                  multiple
+-                  onChange={selectFiles}
+-                  ref={fileInput}
+-                  type="file"
+-                />
+-                <input
+-                  accept={ACCEPTED_LIBRARY_FILES}
+-                  hidden
+-                  multiple
+-                  onChange={selectFolders}
+-                  ref={folderInput}
+-                  type="file"
+-                  webkitdirectory=""
+-                />
+-              </>
++              <Button
++                component="a"
++                href={uploadUrlFor(folder)}
++                rel="noopener"
++                startIcon={<UploadFileIcon />}
++                sx={actionButtonSx}
++                target="_blank"
++                variant="contained"
++              >
++                {t('library.folders.manager.upload')}
++              </Button>
+             }
+             <Button
+               onClick={onCreateFolder}
