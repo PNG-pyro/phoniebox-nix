@@ -437,6 +437,8 @@ in
     lib.mkMerge [
       {
 
+        nixpkgs.overlays = [ (import ../overlays/cross-fixes.nix) ];
+
         users.users.${cfg.user} = {
           linger = true;
           extraGroups =
