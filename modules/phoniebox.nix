@@ -597,6 +597,21 @@ in
           }
         ];
 
+        # A certificate is only served for names it was issued for; anything else gets
+        # an internal_error alert, which looks like a broken server rather than a name
+        # mismatch. Without networking.domain the fallback is a dotless hostname, which
+        # cannot match the dotted name clients normally use (e.g. a DHCP search domain
+        # turning `box` into `box.lan`), so say so up front.
+        warnings = lib.optional
+          (cfg.tls.enable && cfg.tls.hostNames == [ ] && config.networking.domain == null)
+          ''
+            services.phoniebox.tls is on with no tls.hostNames, so the certificate is
+            issued for '${config.networking.fqdnOrHostName}' only - this host has no
+            networking.domain set. If you reach the jukebox by a dotted name, HTTPS will
+            fail for it; list the names you actually use in
+            services.phoniebox.tls.hostNames.
+          '';
+
         networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall (
           [
             cfg.webPort
