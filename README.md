@@ -5,7 +5,8 @@ v3) — the RFID jukebox where you tap a card and music plays.
 
 This is a flake providing the daemon, the web app, a NixOS module (`services.phoniebox`), and a
 set of patches against a pinned upstream commit. Everything is declarative: your jukebox is a
-NixOS config, and `nixos-rebuild` is the whole install-and-upgrade story.
+NixOS config, and `nixos-rebuild` is the whole install-and-upgrade story.However, I haven't 
+supported the whole installer yet, so not all configurations will port over.
 
 ![The jukebox on the bench: Orange Pi RV with audio HAT, OLED, rotary dial and PN532 reader](orangepi-phoniebox.jpg)
 
