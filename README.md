@@ -70,13 +70,24 @@ Then browse to the box on port 80. Music, cards and playlists live under
 | `readers.<name>` | RFID readers; `generic_nfcpy`, `generic_usb`, `rdm6300_serial`, `pn532_i2c_py532` |
 | `audio.primary` / `.secondary` | Named outputs (e.g. speakers / headphones) with optional per-output volume ceilings |
 | `audio.normalize` | Even out loudness between tracks |
-| `login.enable` | HTTP basic auth in front of the web app; set the password on the box with `sudo phoniebox-set-password` |
+| `login.enable` | HTTP basic auth in front of the web app; set the password on the box with `sudo phoniebox-set-password` (see caveat below) |
 | `copyparty.enable` | Web uploads for the music folder, served at `/upload` |
 | `tls.enable` | HTTPS alongside HTTP — see note below |
 | `display.enable` | I2C OLED status display |
 | `hotspot.enable` | Fall back to a setup hotspot with captive portal when no known WiFi is around |
 | `settings` | Arbitrary `jukebox.yaml` keys, deep-merged on every start |
 | `extraFeatures.enable` | Turn off everything in the next section (default: on) |
+
+### `login.enable`
+
+This is implemented entirely in the NixOS module — Caddy `basic_auth` plus a
+`phoniebox-set-password` helper — so it doesn't depend on any of the patches. Until you set a
+password, no login is asked for.
+
+Caveat: it was built and used against the `main` branch and **hasn't been exercised on
+`develop`**. The auth covers `/api/`, which on this branch is also where the web app opens its
+event WebSocket, and that combination is untested here. If you turn it on and the UI stops
+receiving updates, that's the first place to look.
 
 ### `tls.enable`
 
@@ -123,6 +134,25 @@ fixes (such as the PN532 reader patch) always apply regardless.
 - Web app quality-of-life: lazy-loaded cover art, remembered scroll position, a floating back
   bar, and a responsive header that survives a phone-sized screen.
 - PN532 reader fixes for USB serial adapters.
+
+## What this does *not* cover
+
+This packages the parts needed to run the jukebox; it is not a reimplementation of upstream's
+installer. Things upstream's `install-jukebox.sh` can set up that have no equivalent here:
+
+- **Kiosk mode** — upstream's `setup_kiosk_mode.sh` (a local browser showing the web app on an
+  attached screen). No declarative option for it yet.
+- **Samba share** — upstream's `setup_samba.sh`. `copyparty.enable` covers a similar need over
+  HTTP, but it isn't the same thing.
+- **Bluetooth audio.**
+- **HiFiBerry and other board-specific audio helpers** — `audio.primary`/`.secondary` just take
+  PipeWire sink names, so anything PipeWire can see works, but there's no per-HAT setup helper.
+- Raspberry-Pi-specific steps (`raspi-config`, boot-time tuning, OS updates) — not applicable
+  on NixOS.
+
+More generally: the options here are the ones this build needed. Plenty of upstream settings
+have simply never been looked at, and can be reached through `services.phoniebox.settings`,
+which writes arbitrary keys into `jukebox.yaml`. Patches welcome if you wire one up properly.
 
 ## Hardware notes
 
