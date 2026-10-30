@@ -23,7 +23,7 @@ It also makes non-Pi hardware practical. The jukebox this was developed on is an
 (RISC-V)**, which I targeted for a few reasons - similar price and form factor to the pi 3b, but 
 it has usb c power-in and newer wifi, and the chip does this neat pinmux thing, so pretty much any
 HAT should be configurable (with enough work). I've also run it on an Orange Pi Zero 3 (aarch64). No reason 
-you couldn't use it on a pi if you like, though - they have official nixos images.
+you couldn't use it on a raspberry pi if you like, though - they have official nixos images.
 
 ## What's in the box
 
