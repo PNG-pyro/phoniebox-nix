@@ -16,10 +16,8 @@ Do be warned, I'm a hobbyist coder at best, and this is fairly vibe-coded... but
 
 ## Why
 
-Upstream Phoniebox installs itself with a shell script that mutates a Raspberry Pi OS image.
-That works, but it isn't reproducible, it's awkward to roll back, and it assumes a Pi. Packaging
-it for NixOS means the whole jukebox — daemon, MPD, web server, reader config, audio routing,
-display — is one config file, rebuilt atomically and rolled back by picking an older generation.
+I mostly just like nix. It lets me push updates to my code across the network and do other 
+things that make iteration interesting and quick. 
 
 It also makes non-Pi hardware practical. The jukebox this was developed on is an **Orange Pi RV
 (RISC-V)**; it has also run on an Orange Pi Zero 3 (aarch64). Nothing here is Pi-specific.
