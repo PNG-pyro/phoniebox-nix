@@ -8,7 +8,7 @@ set of patches against a pinned upstream commit. Everything is declarative: your
 NixOS config, and `nixos-rebuild` is the whole install-and-upgrade story. However, I haven't
 supported the whole installer yet, so not all configurations will port over — see
 [what this does not cover](#what-this-does-not-cover). Also, it uses Caddy instead of Nginx, 
-mostly because I have actual (if minimal) experience getting caddy to work with nix.
+mostly because I have actual (if minimal) experience getting Caddy to work with NixOS.
 
 Do be warned, I'm a hobbyist coder at best, and this is fairly vibe-coded... but it works on *my* machine. :P 
 
@@ -16,11 +16,14 @@ Do be warned, I'm a hobbyist coder at best, and this is fairly vibe-coded... but
 
 ## Why
 
-I mostly just like nix. It lets me push updates to my code across the network and do other 
+I mostly just like nix and NixOS. It lets me push updates to my computers across the network and do other 
 things that make iteration interesting and quick. 
 
 It also makes non-Pi hardware practical. The jukebox this was developed on is an **Orange Pi RV
-(RISC-V)**; it has also run on an Orange Pi Zero 3 (aarch64). Nothing here is Pi-specific.
+(RISC-V)**, which I targeted for a few reasons - similar price and form factor to the pi 3b, but 
+it has usb c power-in and newer wifi, and the chip does this neat pinmux thing, so pretty much any
+HAT should be configurable (with enough work). I've also run it on an Orange Pi Zero 3 (aarch64). No reason 
+you couldn't use it on a pi if you like, though - they have official nixos images.
 
 ## What's in the box
 
