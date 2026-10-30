@@ -1,0 +1,9 @@
+# nix build symlinks
+result
+result-*
+
+# local tool state (machine-specific permissions etc.)
+.claude/settings.local.json
+
+# working notes for this machine's setup, not useful to anyone else
+CLAUDE.md
