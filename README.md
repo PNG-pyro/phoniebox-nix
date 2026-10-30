@@ -157,7 +157,7 @@ installer. Things upstream's `install-jukebox.sh` can set up that have no equiva
 
 More generally: the options here are the ones this build needed. Plenty of upstream settings
 have simply never been looked at, and can be reached through `services.phoniebox.settings`,
-which writes arbitrary keys into `jukebox.yaml`. Patches welcome if you wire one up properly.
+which writes arbitrary keys into `jukebox.yaml`.
 
 ## Hardware notes
 
@@ -182,8 +182,6 @@ Works, and runs a real jukebox daily. The `develop` branch tracks upstream `futu
 `main` tracks the older `future3/main` and is what the first build ran on. Patches are pinned to
 a specific upstream commit, so bumping that commit means regenerating them — not a one-line
 change.
-
-Issues and patches welcome, especially from anyone running this on other hardware.
 
 ## License
 
