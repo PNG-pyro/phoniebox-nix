@@ -7,7 +7,10 @@ This is a flake providing the daemon, the web app, a NixOS module (`services.pho
 set of patches against a pinned upstream commit. Everything is declarative: your jukebox is a
 NixOS config, and `nixos-rebuild` is the whole install-and-upgrade story. However, I haven't
 supported the whole installer yet, so not all configurations will port over — see
-[what this does *not* cover](#what-this-does-not-cover).
+[what this does not cover](#what-this-does-not-cover). Also, it uses Caddy instead of Nginx, 
+mostly because I have actual (if minimal) experience getting caddy to work with nix.
+
+Do be warned, I'm a hobbyist coder at best, and this is fairly vibe-coded... but it works on *my* machine. :P 
 
 ![The jukebox on the bench: Orange Pi RV with audio HAT, OLED, rotary dial and PN532 reader](orangepi-phoniebox.jpg)
 
