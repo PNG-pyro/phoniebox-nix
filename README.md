@@ -65,6 +65,9 @@ Add the flake as an input and enable the module:
 }
 ```
 
+Rebuild-switch or burn an SD, however you deploy - if you're targeting RISC-V like me, I'd suggest cross-compiling on a more powerful machine, 
+since there's little binary cache for that architecture and it would take... a while to do on the board natively. 
+
 Then browse to the box on port 80. Music, cards and playlists live under
 `/var/lib/phoniebox/shared/`, which survives rebuilds and rollbacks.
 
@@ -168,13 +171,8 @@ Collected while getting this running on an Orange Pi RV; may save someone else t
   U-Boot's `/memory` fixup never reaches the kernel), Linux happily allocates into 2 GB of
   address space that doesn't exist — which presents as random hard freezes with nothing in the
   journal, plus ext4 corruption that survives re-flashing the card, because the page cache is
-  already corrupt before writeback. `U-Boot SPL` prints the real size (`LPDDR4: 2G`) on the
-  serial console. A small overlay correcting the `memory@40000000` node fixes it.
-- **A frozen board writes no logs.** The journal is persistent, but a hard hang never gets
-  flushed, so the log simply stops mid-sentence. If you're chasing lockups, wire up the UART and
-  set `kernel.sysrq = 1` so you can dump stuck tasks over serial while it's wedged.
-- `systemd-fsck` no longer honours `/forcefsck`. Use the `fsck.mode=force fsck.repair=yes`
-  kernel parameters, or check the card offline.
+  already corrupt before writeback. A USB-to-TTL adapter is the best troubleshooting tool I've
+  bought all year. A small overlay correcting the `memory@40000000` node fixes it.
 
 ## Status
 
